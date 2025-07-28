@@ -13,4 +13,7 @@ build-test:
 run-test:
 	docker run -it --rm --name $(CONTAINER_NAME)-test1 --network $(NETWORK_NAME) --ip $(TEST_IP_ADDRESS) $(IMAGE_NAME)-test1:latest
 
-.PHONY: build-test run-test
+run-test-debug:
+	docker run -it --rm --entrypoint /bin/bash --name $(CONTAINER_NAME)-test1 --network $(NETWORK_NAME) --ip $(TEST_IP_ADDRESS) $(IMAGE_NAME)-test1:latest
+
+.PHONY: build-test run-test run-test-debug
