@@ -11,9 +11,9 @@ build-test:
 
 # Run the Docker test container
 run-test:
-	docker run -it --rm --name $(CONTAINER_NAME)-test1 --network $(NETWORK_NAME) --ip $(TEST_IP_ADDRESS) $(IMAGE_NAME)-test1:latest
+	docker run -it --rm --cap-add=NET_ADMIN --name $(CONTAINER_NAME)-test1 --network $(NETWORK_NAME) --ip $(TEST_IP_ADDRESS) $(IMAGE_NAME)-test1:latest
 
 run-test-debug:
-	docker run -it --rm --entrypoint /bin/bash --name $(CONTAINER_NAME)-test1 --network $(NETWORK_NAME) --ip $(TEST_IP_ADDRESS) $(IMAGE_NAME)-test1:latest
+	docker run -it --rm --cap-add=NET_ADMIN --entrypoint /bin/bash --name $(CONTAINER_NAME)-test1 --network $(NETWORK_NAME) --ip $(TEST_IP_ADDRESS) $(IMAGE_NAME)-test1:latest
 
 .PHONY: build-test run-test run-test-debug
