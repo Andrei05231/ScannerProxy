@@ -1,0 +1,24 @@
+FROM python:3.10-slim
+
+# Install OS-level dependencies
+RUN apt update && apt install -y iputils-ping libpcap-dev tcpdump  iptables
+
+
+# Copy entire app directory
+COPY app /app
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Set working directory
+WORKDIR /app
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Install Python packages
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Run the main script
+# CMD ["python", "connectToScanner.py"]
+CMD ["python", "testReceiver.py"]
+
