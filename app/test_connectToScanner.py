@@ -8,13 +8,7 @@ response_port = 706
 
 # Example scanner packet (should match expected format)
 packet1_hex = """
-55 00 00 5a 00 00 00 09 b9 00 a5 2c 0a 00 34 74
-00 00 00 00 4c 6d 33 36 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-00 00 00 00
+55 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 """
 
 def parse_hex_dump(hex_string):
@@ -45,7 +39,7 @@ if __name__ == "__main__":
 
     # Wait for response
     try:
-        resp, addr = sock.recvfrom(2048)
+        resp, addr = sock.recvfrom(1024)
         print(f"Received response from {addr}: {resp.hex()}")
     except socket.timeout:
         print("No response received from service.")
