@@ -1,11 +1,11 @@
-from app.receiverProxy import modify_packet, parse_hex_dump, send_hex_packet, send_tcp_packet, wait_for_tcp_synack, wait_for_udp_response
+from receiverProxy import modify_packet, parse_hex_dump, send_hex_packet, send_tcp_packet, wait_for_tcp_synack, wait_for_udp_response
 
 
 iface = "eth0"
 src_mac = "bc:24:11:b6:23:f8"
 dst_mac = "80:30:49:e0:c4:0d"
-src_ip = "10.0.52.201"
-dst_ip = "192.168.50.173"
+src_ip = "172.30.175.74"
+dst_ip = "172.30.166.131"
 udp_port = 706
 src_tcp_port = 710
 dst_tcp_port = 708
