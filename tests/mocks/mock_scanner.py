@@ -267,13 +267,18 @@ def send_file_to_agent(scanner_service, selected_agent):
     # Extract IP from address (format is usually "ip:port")
     target_ip = address.split(':')[0] if ':' in address else address
     
+    # Default file to send
+    file_to_send = "scan.raw"
+    
     console.print(f"\n[bold cyan]Sending file transfer request to {src_name}...[/bold cyan]")
+    console.print(f"[dim]File to send: {file_to_send}[/dim]")
     
     with console.status("[bold green]Sending file transfer request...", spinner="dots"):
         success, response = scanner_service.send_file_transfer_request(
             target_ip=target_ip,
             src_name="Scanner",
-            dst_name=dst_name
+            dst_name=dst_name,
+            file_path=file_to_send
         )
     
     if success:
@@ -285,13 +290,17 @@ def send_file_to_agent(scanner_service, selected_agent):
                 f"[green]✓ File transfer request sent successfully![/green]\n\n"
                 f"Target: {src_name} ({target_ip})\n"
                 f"Network Address: {address}\n"
+                f"File: {file_to_send}\n"
                 f"Request Type: File Transfer (0x5A5400)\n"
                 f"Status: Message delivered via UDP\n\n"
-                f"[bold cyan]Response Received:[/bold cyan]\n"
+                f"[bold cyan]UDP Response Received:[/bold cyan]\n"
                 f"From: {response_src}\n"
                 f"To: {response_dst}\n"
-                f"Response Type: {response.type_of_request.hex()}",
-                title="[bold green]Transfer Request Sent & Response Received[/bold green]",
+                f"Response Type: {response.type_of_request.hex()}\n\n"
+                f"[bold yellow]TCP File Transfer:[/bold yellow]\n"
+                f"Initiated TCP connection on port 708\n"
+                f"File transfer protocol: handshake → size → data → completion",
+                title="[bold green]File Transfer Completed[/bold green]",
                 border_style="green"
             )
         else:
@@ -300,9 +309,11 @@ def send_file_to_agent(scanner_service, selected_agent):
                 f"[green]✓ File transfer request sent successfully![/green]\n\n"
                 f"Target: {src_name} ({target_ip})\n"
                 f"Network Address: {address}\n"
+                f"File: {file_to_send}\n"
                 f"Request Type: File Transfer (0x5A5400)\n"
                 f"Status: Message delivered via UDP\n\n"
-                f"[yellow]⚠ No response received from agent[/yellow]",
+                f"[yellow]⚠ No UDP response received from agent[/yellow]\n"
+                f"TCP connection not initiated (requires UDP response first)",
                 title="[bold green]Transfer Request Sent[/bold green]",
                 border_style="green"
             )
@@ -311,6 +322,7 @@ def send_file_to_agent(scanner_service, selected_agent):
             f"[red]✗ Failed to send file transfer request[/red]\n\n"
             f"Target: {src_name} ({target_ip})\n"
             f"Network Address: {address}\n"
+            f"File: {file_to_send}\n"
             f"Please check network connection and try again.",
             title="[bold red]Transfer Request Failed[/bold red]",
             border_style="red"

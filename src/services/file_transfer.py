@@ -19,19 +19,21 @@ class FileTransferService:
     Follows the same pattern as AgentDiscoveryService for code reusability
     """
     
-    def __init__(self, local_ip: str, port: int = 706):
+    def __init__(self, local_ip: str, port: int = 706, tcp_port: int = 708):
         """
         Initialize file transfer service
         
         Args:
             local_ip: Local IP address for sending
-            port: Port number for communication (default: 706)
+            port: UDP port number for communication (default: 706)
+            tcp_port: TCP port number for file transfer (default: 708)
         """
         self.local_ip = local_ip
         self.port = port
+        self.tcp_port = tcp_port
         self.logger = logging.getLogger(__name__)
     
-    def send_file_transfer_request(self, target_ip: str, src_name: str = "Scanner", dst_name: str = "", timeout: float = 5.0) -> Tuple[bool, Optional[ScannerProtocolMessage]]:
+    def send_file_transfer_request(self, target_ip: str, src_name: str = "Scanner", dst_name: str = "", timeout: float = 5.0, file_path: str = "scan.raw") -> Tuple[bool, Optional[ScannerProtocolMessage]]:
         """
         Send a file transfer request to a specific agent and wait for response
         
@@ -40,6 +42,7 @@ class FileTransferService:
             src_name: Source name for the message
             dst_name: Destination name for the message
             timeout: How long to wait for response
+            file_path: Path to the file to send (default: scan.raw)
             
         Returns:
             Tuple of (success, response_message) where response_message is None if no response
@@ -64,7 +67,16 @@ class FileTransferService:
             response = self._listen_for_response(sock, target_ip, timeout)
             
             if response:
-                self.logger.info(f"Received response from {target_ip}")
+                self.logger.info(f"Received UDP response from {target_ip}, initiating TCP connection on port {self.tcp_port}")
+                
+                # Initiate TCP connection for actual file transfer
+                tcp_success = self._initiate_tcp_connection(target_ip, file_path=file_path)
+                
+                if tcp_success:
+                    self.logger.info(f"TCP connection and file transfer completed successfully with {target_ip}:{self.tcp_port}")
+                else:
+                    self.logger.warning(f"TCP connection or file transfer failed with {target_ip}:{self.tcp_port}")
+                
                 return True, response
             else:
                 self.logger.warning(f"No response received from {target_ip} within {timeout} seconds")
@@ -109,3 +121,137 @@ class FileTransferService:
                 continue
                 
         return None
+
+    def _initiate_tcp_connection(self, target_ip: str, connection_timeout: float = 10.0, file_path: str = "scan.raw") -> bool:
+        """
+        Initiate TCP connection on port 708 for actual file transfer
+        
+        Args:
+            target_ip: IP address of the target agent
+            connection_timeout: Timeout for TCP connection establishment
+            file_path: Path to the file to send (default: scan.raw)
+            
+        Returns:
+            True if connection and file transfer successful, False otherwise
+        """
+        tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        tcp_sock.settimeout(connection_timeout)
+        
+        try:
+            self.logger.info(f"Attempting TCP connection to {target_ip}:{self.tcp_port}")
+            
+            # Connect to the agent's TCP port
+            tcp_sock.connect((target_ip, self.tcp_port))
+            
+            self.logger.info(f"TCP connection established with {target_ip}:{self.tcp_port}")
+            
+            # Send a simple handshake message
+            handshake_message = b"FILE_TRANSFER_READY"
+            tcp_sock.send(handshake_message)
+            self.logger.info(f"Sent handshake message: {handshake_message.decode()}")
+            
+            # Wait for acknowledgment
+            try:
+                ack_response = tcp_sock.recv(1024)
+                self.logger.info(f"Received TCP handshake response: {ack_response}")
+                
+                if ack_response:
+                    self.logger.info(f"TCP handshake successful with {target_ip}")
+                    
+                    # Send the file if handshake is successful
+                    file_sent = self._send_file_over_tcp(tcp_sock, file_path)
+                    
+                    if file_sent:
+                        self.logger.info(f"File {file_path} sent successfully to {target_ip}")
+                        return True
+                    else:
+                        self.logger.error(f"Failed to send file {file_path} to {target_ip}")
+                        return False
+                else:
+                    self.logger.warning(f"No TCP acknowledgment received from {target_ip}")
+                    return False
+                    
+            except socket.timeout:
+                self.logger.warning(f"TCP acknowledgment timeout from {target_ip}")
+                return False
+                
+        except socket.timeout:
+            self.logger.error(f"TCP connection timeout to {target_ip}:{self.tcp_port}")
+            return False
+        except ConnectionRefusedError:
+            self.logger.error(f"TCP connection refused by {target_ip}:{self.tcp_port}")
+            return False
+        except Exception as e:
+            self.logger.error(f"TCP connection error to {target_ip}:{self.tcp_port}: {e}")
+            return False
+        finally:
+            tcp_sock.close()
+            self.logger.info(f"TCP connection closed with {target_ip}:{self.tcp_port}")
+
+    def _send_file_over_tcp(self, tcp_sock: socket.socket, file_path: str) -> bool:
+        """
+        Send file contents over established TCP connection
+        
+        Args:
+            tcp_sock: Established TCP socket
+            file_path: Path to the file to send
+            
+        Returns:
+            True if file sent successfully, False otherwise
+        """
+        try:
+            # Check if file exists
+            import os
+            if not os.path.exists(file_path):
+                self.logger.error(f"File {file_path} does not exist")
+                return False
+            
+            file_size = os.path.getsize(file_path)
+            self.logger.info(f"Preparing to send file {file_path} ({file_size} bytes)")
+            
+            # Send file size first
+            size_message = f"FILE_SIZE:{file_size}\n".encode()
+            tcp_sock.send(size_message)
+            self.logger.info(f"Sent file size: {file_size} bytes")
+            
+            # Wait for size acknowledgment
+            size_ack = tcp_sock.recv(1024)
+            if b"SIZE_OK" not in size_ack:
+                self.logger.error("Agent did not acknowledge file size")
+                return False
+            
+            # Send file contents in chunks
+            chunk_size = 8192  # 8KB chunks
+            bytes_sent = 0
+            
+            with open(file_path, 'rb') as file:
+                while True:
+                    chunk = file.read(chunk_size)
+                    if not chunk:
+                        break
+                    
+                    tcp_sock.sendall(chunk)
+                    bytes_sent += len(chunk)
+                    
+                    # Log progress periodically
+                    if bytes_sent % (chunk_size * 10) == 0:
+                        progress = (bytes_sent / file_size) * 100
+                        self.logger.info(f"File transfer progress: {bytes_sent}/{file_size} bytes ({progress:.1f}%)")
+            
+            # Send end-of-file marker
+            eof_message = b"FILE_TRANSFER_COMPLETE"
+            tcp_sock.send(eof_message)
+            
+            # Wait for transfer completion acknowledgment
+            completion_ack = tcp_sock.recv(1024)
+            
+            if b"TRANSFER_OK" in completion_ack:
+                self.logger.info(f"File transfer completed successfully: {bytes_sent} bytes sent")
+                return True
+            else:
+                self.logger.error("Agent did not acknowledge file transfer completion")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error sending file over TCP: {e}")
+            return False

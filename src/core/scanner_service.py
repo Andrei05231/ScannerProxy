@@ -36,6 +36,7 @@ class ScannerService:
             
             # Initialize discovery service
             udp_port = config.get('network.udp_port', 706)
+            tcp_port = config.get('network.tcp_port', 708)
             self.discovery_service = AgentDiscoveryService(
                 local_ip=self.local_ip,
                 broadcast_ip=self.broadcast_ip,
@@ -45,7 +46,8 @@ class ScannerService:
             # Initialize file transfer service
             self.file_transfer_service = FileTransferService(
                 local_ip=self.local_ip,
-                port=udp_port
+                port=udp_port,
+                tcp_port=tcp_port
             )
             
             self.logger.info(f"Scanner service initialized on interface {self.interface_name}")
@@ -79,7 +81,7 @@ class ScannerService:
         
         return discovered_agents
     
-    def send_file_transfer_request(self, target_ip: str, src_name: str = "Scanner", dst_name: str = "") -> Tuple[bool, Optional[ScannerProtocolMessage]]:
+    def send_file_transfer_request(self, target_ip: str, src_name: str = "Scanner", dst_name: str = "", file_path: str = "scan.raw") -> Tuple[bool, Optional[ScannerProtocolMessage]]:
         """
         Send a file transfer request to a specific agent and wait for response
         
@@ -87,6 +89,7 @@ class ScannerService:
             target_ip: IP address of the target agent
             src_name: Source name for the message
             dst_name: Destination name for the message
+            file_path: Path to the file to send (default: scan.raw)
             
         Returns:
             Tuple of (success, response_message) where response_message is None if no response
@@ -95,12 +98,13 @@ class ScannerService:
             self.logger.error("File transfer service not initialized")
             return False, None
         
-        self.logger.info(f"Sending file transfer request to {target_ip}")
+        self.logger.info(f"Sending file transfer request to {target_ip} for file {file_path}")
         
         success, response = self.file_transfer_service.send_file_transfer_request(
             target_ip=target_ip,
             src_name=src_name,
-            dst_name=dst_name
+            dst_name=dst_name,
+            file_path=file_path
         )
         
         if success:
