@@ -1,87 +1,69 @@
 from pydantic import BaseModel, Field
-from typing import Literal
-import struct
+from typing import ClassVar
+from ipaddress import IPv4Address, AddressValueError
+import socket
 
-class ScannerMessage(BaseModel):
-    model: str = Field(..., min_length=1, max_length=4)
-    scan_length: int
-    copies: int
-    scan_pc: int
-    ip: str = "192.168.1.137"
-    hostname: str = "DESKTOP-AS2MOOV"
-    firmware_version: str = "2.5.2"
-    year: int = 2025
-    day_of_year: int = 1822
-    hour: int = 3
-    minute: int = 12
-    second: int = 26
-    second_alt: int = 57
+
+class ScannerProtocolMessage(BaseModel):
+    SIGNATURE: ClassVar[bytes] = b'\x55\x00\x00'
+    TYPE_OF_REQUEST: ClassVar[bytes] = b'\x5a\x00\x00'
+
+    signature: bytes = Field(default=SIGNATURE)
+    type_of_request: bytes = Field(default=TYPE_OF_REQUEST)
+    reserved1: bytes = Field(default=b'\x00' * 6)  # 6 bytes reserved
+    initiator_ip: IPv4Address = Field(default=IPv4Address("192.168.1.137"))
+    reserved2: bytes = Field(default=b'\x00\x00\x00\x00')
+    src_name: bytes = Field(default=b"L24e")
+    dst_name: bytes = Field(default=b"")
+    reserved3: bytes = Field(default=b'\x00' * 10)  # May contain timestamp
 
     def to_bytes(self) -> bytes:
-        header = b'\x55\x00\x00\x5a\x00\x00\x00\x09\xb9\x00\x2c\x84'
-
-        # Convert IP to bytes
-        ip_parts = bytes(map(int, self.ip.split(".")))
-        unknown1 = b'\x00\x00\x02\xc4'
-
-        # Model and hostname to fixed-length fields
-        model_bytes = self.model.encode("ascii").ljust(40, b'\x00')
-        hostname_bytes = self.hostname.encode("ascii").ljust(40, b'\x00')
-
-        # Date/time section
-        datetime_bytes = struct.pack(
-            '<H H B B B B',
-            self.year,
-            self.day_of_year,
-            self.hour,
-            self.minute,
-            self.second,
-            self.second_alt
-        )
-
-        # Scan stats
-        scan_info = struct.pack('<H B H', self.scan_length, self.copies, self.scan_pc)
-
+        ip_bytes = self.initiator_ip.packed  # Convert IPv4Address to 4 bytes
+        src_bytes = self.src_name.ljust(20, b'\x00')
+        dst_bytes = self.dst_name.ljust(40, b'\x00')
         return (
-            header +
-            ip_parts +
-            unknown1 +
-            model_bytes +
-            hostname_bytes +
-            scan_info +
-            datetime_bytes +
-            b'\x00\x00'  # footer or terminator
+            self.signature +
+            self.type_of_request +
+            self.reserved1 +
+            ip_bytes +
+            self.reserved2 +
+            src_bytes +
+            dst_bytes +
+            self.reserved3
         )
+    
+    def dbg(self):
+        print(f"Signature: {len(self.signature)} {self.signature.hex()}")
+        print(f"Type of Request: {len(self.type_of_request)} {self.type_of_request.hex()}")
+        print(f"Reserved1: {len(self.reserved1)} {self.reserved1.hex()}")
+        print(f"Initiator IP: {self.initiator_ip} (4 bytes: {self.initiator_ip.packed.hex()})")
+        print(f"Reserved2: {len(self.reserved2)} {self.reserved2.hex()}")
+        print(f"Source Name: {len(self.src_name)} {self.src_name.hex()}")
+        print(f"Destination Name: {len(self.dst_name)} {self.dst_name.hex()}")
+        print(f"Reserved3: {len(self.reserved3)} {self.reserved3.hex()}")
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "ScannerMessage":
-        # Parse known offsets based on structure
-        model = data[20:60].rstrip(b'\x00').decode('ascii')
-        scan_length = struct.unpack_from('<H', data, 100)[0]
-        copies = data[102]
-        scan_pc = struct.unpack_from('<H', data, 103)[0]
-        year, day, hour, minute, second, second_alt = struct.unpack_from('<H H B B B B', data, 105)
+    def from_bytes(cls, data: bytes) -> "ScannerProtocolMessage":
+        if len(data) != 90:
+            raise ValueError(f"Expected 90 bytes, got {len(data)}")
+
+        signature = data[0:3]
+        type_of_request = data[3:6]
+        reserved1 = data[6:12]
+        ip_bytes = data[12:16]
+        initiator_ip = IPv4Address(ip_bytes)  # Create IPv4Address directly from 4 bytes
+        reserved2 = data[16:20]
+        src_name = data[20:40].rstrip(b'\x00')
+        dst_name = data[40:80].rstrip(b'\x00')
+        reserved3 = data[80:90]
 
         return cls(
-            model=model,
-            scan_length=scan_length,
-            copies=copies,
-            scan_pc=scan_pc,
-            year=year,
-            day_of_year=day,
-            hour=hour,
-            minute=minute,
-            second=second,
-            second_alt=second_alt
+            signature=signature,
+            type_of_request=type_of_request,
+            reserved1=reserved1,
+            initiator_ip=initiator_ip,
+            reserved2=reserved2,
+            src_name=src_name,
+            dst_name=dst_name,
+            reserved3=reserved3
         )
-
-
-# Example usage
-msg = ScannerMessage(
-    model="L24e",
-    scan_length=11863,
-    copies=1,
-    scan_pc=6044
-)
-packet = msg.to_bytes()
-print(packet.hex(" "))
