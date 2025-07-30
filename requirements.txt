@@ -4,3 +4,6 @@ scapy
 pydantic
 netifaces
 PyYAML
+rich
+click
+inquirer

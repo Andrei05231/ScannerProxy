@@ -5,6 +5,12 @@ Demonstrates clean separation of concerns and SOLID principles.
 import logging
 import sys
 from pathlib import Path
+import inquirer
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich.table import Table
+from rich import print as rprint
 
 # Add src to Python path for imports when running as script
 if __name__ == "__main__":
@@ -19,6 +25,99 @@ except ImportError:
     from core.scanner_service import ScannerService
     from utils.config import config
 
+# Initialize rich console
+console = Console()
+
+
+def show_welcome():
+    """Display welcome message with rich formatting"""
+    welcome_text = Text("Scanner Proxy", style="bold blue")
+    subtitle = Text("Modular Network Scanner with SOLID Architecture", style="italic")
+    
+    panel = Panel.fit(
+        f"{welcome_text}\n{subtitle}",
+        title="Welcome",
+        border_style="blue"
+    )
+    console.print(panel)
+
+
+def interactive_menu():
+    """Interactive CLI menu using inquirer library"""
+    questions = [
+        inquirer.List(
+            'operation',
+            message="Select an operation",
+            choices=[
+                ('Dummy Operation', 'dummy'),
+                ('Discover Agents', 'discover'),
+                ('Exit', 'exit')
+            ]
+        )
+    ]
+    
+    answers = inquirer.prompt(questions)
+    return answers['operation'] if answers else 'exit'
+        
+
+def dummy_operation():
+    """Dummy operation for testing with rich formatting"""
+    console.print("\n")
+    panel = Panel(
+        "This is a placeholder operation for testing purposes.\nNo actual scanner operations are performed.",
+        title="[bold yellow]Dummy Operation[/bold yellow]",
+        border_style="yellow"
+    )
+    console.print(panel)
+    console.input("\n[dim]Press Enter to return to main menu...[/dim]")
+
+
+def discover_agents_operation():
+    """Perform agent discovery operation with rich formatting"""
+    console.print("\n")
+    
+    # Setup logging
+    setup_logging()
+    logger = logging.getLogger(__name__)
+    
+    with console.status("[bold green]Initializing scanner service...", spinner="dots"):
+        try:
+            # Create and initialize scanner service
+            scanner_service = ScannerService()
+            scanner_service.initialize()
+            
+            # Display network status
+            network_status = scanner_service.get_network_status()
+        except Exception as e:
+            logger.error(f"Scanner initialization failed: {e}")
+            console.print(f"[bold red]Error:[/bold red] {e}")
+            return
+            
+    # Create network info table
+    table = Table(title="Network Information")
+    table.add_column("Property", style="cyan", no_wrap=True)
+    table.add_column("Value", style="magenta")
+    
+    table.add_row("Local IP", network_status['local_ip'])
+    table.add_row("Broadcast IP", network_status['broadcast_ip'])
+    table.add_row("Interface", network_status['interface_name'])
+    
+    console.print(table)
+    
+    with console.status("[bold green]Discovering agents on network...", spinner="dots"):
+        try:
+            # Discover agents on the network
+            discovered_agents = scanner_service.discover_agents()
+            
+            # Print summary with rich formatting
+            print_discovery_summary(discovered_agents)
+            
+        except Exception as e:
+            logger.error(f"Scanner operation failed: {e}")
+            console.print(f"[bold red]Error:[/bold red] {e}")
+    
+    console.input("\n[dim]Press Enter to return to main menu...[/dim]")
+
 
 def setup_logging():
     """Setup logging configuration"""
@@ -32,49 +131,62 @@ def setup_logging():
 
 
 def print_discovery_summary(discovered_agents):
-    """Print a summary of discovered agents"""
-    print("\n=== DISCOVERY SUMMARY ===")
+    """Print a summary of discovered agents with rich formatting"""
+    console.print("\n")
+    
     if discovered_agents:
-        print(f"Found {len(discovered_agents)} agent(s) listening for scanned documents:")
+        # Create agents table
+        agents_table = Table(title=f"Discovery Results - Found {len(discovered_agents)} Agent(s)")
+        agents_table.add_column("#", style="cyan", no_wrap=True)
+        agents_table.add_column("Address", style="yellow")
+        agents_table.add_column("Source Name", style="green")
+        agents_table.add_column("Destination Name", style="blue")
+        agents_table.add_column("IP", style="magenta")
+        
         for i, (message, address) in enumerate(discovered_agents, 1):
-            print(f"{i}. Agent at {address}")
-            print(f"   Source Name: {message.src_name.decode('ascii', errors='ignore')}")
-            print(f"   Destination Name: {message.dst_name.decode('ascii', errors='ignore')}")
-            print(f"   IP: {message.initiator_ip}")
+            agents_table.add_row(
+                str(i),
+                address,
+                message.src_name.decode('ascii', errors='ignore'),
+                message.dst_name.decode('ascii', errors='ignore'),
+                str(message.initiator_ip)
+            )
+        
+        console.print(agents_table)
     else:
-        print("No agents discovered on the network listening for scanned documents.")
+        panel = Panel(
+            "No agents discovered on the network listening for scanned documents.",
+            title="[bold yellow]Discovery Results[/bold yellow]",
+            border_style="yellow"
+        )
+        console.print(panel)
 
 
 def main():
-    """Main function demonstrating the new modular architecture"""
-    # Setup logging
-    setup_logging()
-    logger = logging.getLogger(__name__)
-    
+    """Main function with interactive CLI menu using rich and inquirer"""
     try:
-        # Create and initialize scanner service
-        scanner_service = ScannerService()
-        scanner_service.initialize()
+        # Show welcome message
+        show_welcome()
         
-        # Display network status
-        network_status = scanner_service.get_network_status()
-        print(f"Local IP: {network_status['local_ip']}")
-        print(f"Broadcast IP: {network_status['broadcast_ip']}")
-        print(f"Interface: {network_status['interface_name']}")
-        print("Starting agent discovery...")
-        print()
+        while True:
+            selected_option = interactive_menu()
+            
+            if selected_option == 'exit':
+                console.print("\n[bold green]Thank you for using Scanner Proxy![/bold green]")
+                break
+            elif selected_option == 'dummy':
+                dummy_operation()
+            elif selected_option == 'discover':
+                discover_agents_operation()
         
-        # Discover agents on the network
-        discovered_agents = scanner_service.discover_agents()
+        return 0
         
-        # Print summary
-        print_discovery_summary(discovered_agents)
-        
-    except Exception as e:
-        logger.error(f"Scanner operation failed: {e}")
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Operation cancelled by user.[/yellow]")
         return 1
-    
-    return 0
+    except Exception as e:
+        console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+        return 1
 
 
 if __name__ == "__main__":
