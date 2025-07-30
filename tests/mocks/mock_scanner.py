@@ -28,7 +28,7 @@ if __name__ == "__main__":
     # Initialize Discovery
 
     x = ScannerProtocolMessage()
-    x.dbg()
+    x.debug()
 
     #udp_packet_bytes = bytes.fromhex(UDP_PAYLOAD)
     udp_packet_bytes = x.to_bytes()
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     try:
         resp, addr = sock.recvfrom(1024)
         y = ScannerProtocolMessage.from_bytes(resp)
-        y.dbg()
+        y.debug()
         print(f"Received response to first packet from {addr}: {y}")
         # print(f"Received response to first packet from {addr}: {resp.hex()}")
     except socket.timeout:
