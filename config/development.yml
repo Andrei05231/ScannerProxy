@@ -12,7 +12,8 @@ network:
 scanner:
   default_src_name: "Scanner-Dev"
   max_retry_attempts: 3
-  default_file_path: "scan.raw"
+  default_file_path: "files/scan.raw"
+  files_directory: "files"
 
 # File Transfer Protocol Messages
 file_transfer:

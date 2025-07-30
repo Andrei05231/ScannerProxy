@@ -258,6 +258,91 @@ def agent_action_menu(selected_agent):
     return answers['action'] if answers else 'back'
 
 
+def select_file_to_send():
+    """Allow user to select a file from the files directory"""
+    import os
+    
+    files_dir = config.get('scanner.files_directory', 'files')
+    
+    # Check if files directory exists
+    if not os.path.exists(files_dir):
+        console.print(f"[red]Files directory '{files_dir}' does not exist![/red]")
+        return None
+    
+    # Get list of files in the directory
+    try:
+        all_files = os.listdir(files_dir)
+        # Filter for common file types (you can extend this list)
+        valid_extensions = ['.raw', '.pdf', '.jpg', '.jpeg', '.png', '.txt', '.doc', '.docx']
+        files = [f for f in all_files if os.path.isfile(os.path.join(files_dir, f)) and 
+                any(f.lower().endswith(ext) for ext in valid_extensions)]
+        
+        if not files:
+            console.print(f"[yellow]No files found in '{files_dir}' directory![/yellow]")
+            console.print(f"[dim]Supported file types: {', '.join(valid_extensions)}[/dim]")
+            return None
+        
+        # Create file selection table
+        files_table = Table(title=f"Available Files in '{files_dir}'")
+        files_table.add_column("#", style="cyan", no_wrap=True)
+        files_table.add_column("File Name", style="white")
+        files_table.add_column("Size", style="yellow")
+        
+        for i, filename in enumerate(files, 1):
+            file_path = os.path.join(files_dir, filename)
+            file_size = os.path.getsize(file_path)
+            size_str = format_file_size(file_size)
+            files_table.add_row(str(i), filename, size_str)
+        
+        console.print(files_table)
+        
+        # Create choices for inquirer
+        choices = []
+        for i, filename in enumerate(files):
+            file_path = os.path.join(files_dir, filename)
+            file_size = os.path.getsize(file_path)
+            size_str = format_file_size(file_size)
+            choice_text = f"{filename} ({size_str})"
+            choices.append((choice_text, os.path.join(files_dir, filename)))
+        
+        # Add option to cancel
+        choices.append(("← Cancel", None))
+        
+        console.print("\n")  # Add spacing before the selection menu
+        
+        questions = [
+            inquirer.List(
+                'selected_file',
+                message="Select a file to send",
+                choices=choices
+            )
+        ]
+        
+        answers = inquirer.prompt(questions)
+        if answers and answers['selected_file']:
+            selected_path = answers['selected_file']
+            console.print(f"[green]✓ Selected file: {selected_path}[/green]")
+            return selected_path
+        
+        return None
+        
+    except Exception as e:
+        console.print(f"[red]Error reading files directory: {e}[/red]")
+        return None
+
+
+def format_file_size(size_bytes):
+    """Format file size in human readable format"""
+    if size_bytes == 0:
+        return "0 B"
+    size_names = ["B", "KB", "MB", "GB"]
+    i = 0
+    while size_bytes >= 1024 and i < len(size_names) - 1:
+        size_bytes /= 1024.0
+        i += 1
+    return f"{size_bytes:.1f} {size_names[i]}"
+
+
 def send_file_to_agent(scanner_service, selected_agent):
     """Send file transfer request to the selected agent"""
     message, address = selected_agent
@@ -267,17 +352,19 @@ def send_file_to_agent(scanner_service, selected_agent):
     # Extract IP from address (format is usually "ip:port")
     target_ip = address.split(':')[0] if ':' in address else address
     
-    # Get default file from configuration
-    file_to_send = config.get('scanner.default_file_path', 'scan.raw')
+    # Let user select which file to send
+    selected_file = select_file_to_send()
+    if not selected_file:
+        return  # User cancelled or no files available
     
     console.print(f"\n[bold cyan]Sending file transfer request to {src_name}...[/bold cyan]")
-    console.print(f"[dim]File to send: {file_to_send}[/dim]")
+    console.print(f"[dim]File to send: {selected_file}[/dim]")
     
     with console.status("[bold green]Sending file transfer request...", spinner="dots"):
         success, response = scanner_service.send_file_transfer_request(
             target_ip=target_ip,
             dst_name=dst_name,
-            file_path=file_to_send
+            file_path=selected_file
         )
     
     if success:
@@ -289,18 +376,17 @@ def send_file_to_agent(scanner_service, selected_agent):
                 f"[green]✓ File transfer request sent successfully![/green]\n\n"
                 f"Target: {src_name} ({target_ip})\n"
                 f"Network Address: {address}\n"
-                f"File: {file_to_send}\n"
+                f"File: {selected_file}\n"
                 f"Request Type: File Transfer (0x5A5400)\n"
                 f"Status: Message delivered via UDP\n\n"
                 f"[bold cyan]UDP Response Received:[/bold cyan]\n"
                 f"From: {response_src}\n"
                 f"To: {response_dst}\n"
                 f"Response Type: {response.type_of_request.hex()}\n\n"
-                f"[bold yellow]TCP Connection:[/bold yellow]\n"
-                f"Established TCP connection on port {config.get('network.tcp_port', 708)}\n"
-                f"Status: Connection opened and closed successfully\n"
-                f"Note: File transfer implementation temporarily disabled",
-                title="[bold green]TCP Connection Established[/bold green]",
+                f"[bold yellow]TCP File Transfer:[/bold yellow]\n"
+                f"Initiated TCP connection on port {config.get('network.tcp_port', 708)}\n"
+                f"File transfer protocol: direct file data transfer",
+                title="[bold green]File Transfer Completed[/bold green]",
                 border_style="green"
             )
         else:
@@ -309,7 +395,7 @@ def send_file_to_agent(scanner_service, selected_agent):
                 f"[green]✓ File transfer request sent successfully![/green]\n\n"
                 f"Target: {src_name} ({target_ip})\n"
                 f"Network Address: {address}\n"
-                f"File: {file_to_send}\n"
+                f"File: {selected_file}\n"
                 f"Request Type: File Transfer (0x5A5400)\n"
                 f"Status: Message delivered via UDP\n\n"
                 f"[yellow]⚠ No UDP response received from agent[/yellow]\n"
@@ -322,7 +408,7 @@ def send_file_to_agent(scanner_service, selected_agent):
             f"[red]✗ Failed to send file transfer request[/red]\n\n"
             f"Target: {src_name} ({target_ip})\n"
             f"Network Address: {address}\n"
-            f"File: {file_to_send}\n"
+            f"File: {selected_file}\n"
             f"Please check network connection and try again.",
             title="[bold red]Transfer Request Failed[/bold red]",
             border_style="red"

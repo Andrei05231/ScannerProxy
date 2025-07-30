@@ -65,7 +65,8 @@ class ConfigurationManager:
             "scanner": {
                 "default_src_name": "Scanner",
                 "max_retry_attempts": 3,
-                "default_file_path": "scan.raw"
+                "default_file_path": "files/scan.raw",
+                "files_directory": "files"
             },
             "file_transfer": {
                 "handshake_message": "FILE_TRANSFER_READY",
