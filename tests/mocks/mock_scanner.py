@@ -179,12 +179,6 @@ def select_agent(discovered_agents):
     if not discovered_agents:
         return None
     
-    # Clear console to avoid menu repetition
-    console.clear()
-    
-    # Re-display the discovery results for context
-    print_discovery_summary(discovered_agents)
-    
     # Create choices for inquirer
     choices = []
     for i, (message, address) in enumerate(discovered_agents):
