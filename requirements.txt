@@ -3,3 +3,4 @@ Pillow
 scapy
 pydantic
 netifaces
+PyYAML
