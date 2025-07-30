@@ -4,17 +4,7 @@ Main application module.
 import logging
 from .core.scanner_service import ScannerService
 from .utils.config import config
-
-
-def setup_logging():
-    """Setup logging configuration"""
-    log_level = config.get('logging.level', 'INFO')
-    log_format = config.get('logging.format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
-    logging.basicConfig(
-        level=getattr(logging, log_level),
-        format=log_format
-    )
+from .utils.logging_setup import setup_logging
 
 
 def print_discovery_summary(discovered_agents):

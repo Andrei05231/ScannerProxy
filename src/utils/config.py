@@ -76,7 +76,12 @@ class ConfigurationManager:
             },
             "logging": {
                 "level": "INFO",
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                "file_enabled": True,
+                "file_path": "logs/scanner.log",
+                "max_file_size": 10485760,  # 10MB
+                "backup_count": 5,
+                "console_enabled": True
             }
         }
 

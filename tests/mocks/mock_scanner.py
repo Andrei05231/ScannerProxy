@@ -21,9 +21,11 @@ if __name__ == "__main__":
 try:
     from src.core.scanner_service import ScannerService
     from src.utils.config import config
+    from src.utils.logging_setup import setup_logging
 except ImportError:
     from core.scanner_service import ScannerService
     from utils.config import config
+    from utils.logging_setup import setup_logging
 
 # Initialize rich console
 console = Console()
@@ -132,17 +134,6 @@ def discover_agents_operation():
         console.print(f"[bold red]Error:[/bold red] {e}")
     
     console.input("\n[dim]Press Enter to return to main menu...[/dim]")
-
-
-def setup_logging():
-    """Setup logging configuration"""
-    log_level = config.get('logging.level', 'INFO')
-    log_format = config.get('logging.format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
-    logging.basicConfig(
-        level=getattr(logging, log_level),
-        format=log_format
-    )
 
 
 def print_discovery_summary(discovered_agents):
