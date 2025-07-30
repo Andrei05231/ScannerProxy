@@ -104,31 +104,31 @@ def discover_agents_operation():
     
     console.print(table)
     
-    with console.status("[bold green]Discovering agents on network...", spinner="dots"):
-        try:
-            # Discover agents on the network
+    # Discover agents (outside of status context to avoid spinner during selection)
+    try:
+        with console.status("[bold green]Discovering agents on network...", spinner="dots"):
             discovered_agents = scanner_service.discover_agents()
+        
+        # Print summary with rich formatting (after spinner stops)
+        agents_found = print_discovery_summary(discovered_agents)
+        
+        # If agents were found, allow user to select one
+        if agents_found:
+            console.print("\n")
+            selected_agent = select_agent(discovered_agents)
             
-            # Print summary with rich formatting
-            agents_found = print_discovery_summary(discovered_agents)
-            
-            # If agents were found, allow user to select one
-            if agents_found:
-                console.print("\n")
-                selected_agent = select_agent(discovered_agents)
-                
-                if selected_agent:
-                    # Here you can add further operations with the selected agent
-                    # For now, just confirm the selection
-                    console.print("\n[dim]Note: Further operations with the selected agent can be implemented here.[/dim]")
-            
-        except Exception as e:
-            logger.error(f"Scanner operation failed: {e}")
-            console.print(f"[bold red]Error:[/bold red] {e}")
+            if selected_agent:
+                # Here you can add further operations with the selected agent
+                # For now, just confirm the selection
+                console.print("\n[dim]Note: Further operations with the selected agent can be implemented here.[/dim]")
+        
+    except Exception as e:
+        logger.error(f"Scanner operation failed: {e}")
+        console.print(f"[bold red]Error:[/bold red] {e}")
     
     console.input("\n[dim]Press Enter to return to main menu...[/dim]")
 
-    
+
 def setup_logging():
     """Setup logging configuration"""
     log_level = config.get('logging.level', 'INFO')
@@ -179,6 +179,12 @@ def select_agent(discovered_agents):
     if not discovered_agents:
         return None
     
+    # Clear console to avoid menu repetition
+    console.clear()
+    
+    # Re-display the discovery results for context
+    print_discovery_summary(discovered_agents)
+    
     # Create choices for inquirer
     choices = []
     for i, (message, address) in enumerate(discovered_agents):
@@ -189,6 +195,8 @@ def select_agent(discovered_agents):
     
     # Add option to go back
     choices.append(("← Back to main menu", -1))
+    
+    console.print("\n")  # Add spacing before the selection menu
     
     questions = [
         inquirer.List(
