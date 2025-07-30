@@ -164,8 +164,23 @@ freeze-deps: ## Freeze current dependencies to requirements.txt
 	pip freeze > requirements-frozen.txt
 
 # Documentation
-docs: ## Generate documentation (placeholder)
-	@echo "Documentation generation not yet implemented"
+docs: ## Generate documentation
+	@echo "Generating project documentation..."
+	@echo "# ScannerProxy Documentation" > docs/API.md
+	@echo "" >> docs/API.md
+	@echo "## Module Documentation" >> docs/API.md
+	@find src -name "*.py" -exec echo "### {}" \; -exec head -20 {} \; >> docs/API.md
+	@echo "Documentation generated in docs/"
+
+docs-coverage: ## Generate test coverage documentation
+	@echo "Generating coverage documentation..."
+	@mkdir -p docs
+	@$(PYTHON) -m pytest tests/ --cov=src --cov-report=html --cov-report=term > docs/coverage-report.txt 2>&1
+	@echo "Coverage documentation generated in htmlcov/ and docs/coverage-report.txt"
+
+docs-clean: ## Clean documentation artifacts
+	-rm -rf docs/
+	-rm -rf htmlcov/
 
 # CI/CD Support
 ci-test: install-test-deps test-coverage-xml ## Run tests for CI/CD pipeline
@@ -191,4 +206,4 @@ create-network: ## Create Docker network for testing
 remove-network: ## Remove Docker network
 	docker network rm $(NETWORK_NAME) || true
 
-.PHONY: help setup venv install-deps install-test-deps install-dev-deps format lint check run run-dev run-prod test test-unit test-integration test-coverage test-coverage-xml test-watch test-config test-scanner test-network test-protocols test-file-transfer build build-test build-all up down restart logs run-container run-test-container run-test-debug local-server local-client clean clean-test clean-build clean-docker clean-logs security-check update-deps freeze-deps docs ci-test pre-commit show-config show-structure create-network remove-network
+.PHONY: help setup venv install-deps install-test-deps install-dev-deps format lint check run run-dev run-prod test test-unit test-integration test-coverage test-coverage-xml test-watch test-config test-scanner test-network test-protocols test-file-transfer build build-test build-all up down restart logs run-container run-test-container run-test-debug local-server local-client clean clean-test clean-build clean-docker clean-logs security-check update-deps freeze-deps docs docs-coverage docs-clean ci-test pre-commit show-config show-structure create-network remove-network
