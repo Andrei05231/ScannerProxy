@@ -296,10 +296,11 @@ def send_file_to_agent(scanner_service, selected_agent):
                 f"From: {response_src}\n"
                 f"To: {response_dst}\n"
                 f"Response Type: {response.type_of_request.hex()}\n\n"
-                f"[bold yellow]TCP File Transfer:[/bold yellow]\n"
-                f"Initiated TCP connection on port {config.get('network.tcp_port', 708)}\n"
-                f"File transfer protocol: handshake → size → data → completion",
-                title="[bold green]File Transfer Completed[/bold green]",
+                f"[bold yellow]TCP Connection:[/bold yellow]\n"
+                f"Established TCP connection on port {config.get('network.tcp_port', 708)}\n"
+                f"Status: Connection opened and closed successfully\n"
+                f"Note: File transfer implementation temporarily disabled",
+                title="[bold green]TCP Connection Established[/bold green]",
                 border_style="green"
             )
         else:

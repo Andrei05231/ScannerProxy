@@ -5,7 +5,7 @@ network:
   discovery_timeout: 1.0
   socket_timeout: 1.0
   buffer_size: 1024
-  tcp_chunk_size: 8192
+  tcp_chunk_size: 1460
   tcp_connection_timeout: 10.0
 
 # Scanner configuration  
