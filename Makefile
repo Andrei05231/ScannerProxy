@@ -27,6 +27,4 @@ local-server:
 local-client:
 	CONT_IP=127.0.0.1 DEV_NAME=Custom-Scn1-test DESTINATION=scan1 venv/bin/python app/testReceiver.py
 
-
-
 .PHONY: build-test run-test run-test-debug local-server local-client venv

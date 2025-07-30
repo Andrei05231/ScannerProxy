@@ -1,4 +1,4 @@
-from receiverProxy import run_sequence
+from src.receiver_proxy import run_sequence
 iface = "eth0"
 src_mac = "bc:24:11:b6:23:f8"
 dst_mac = "80:30:49:e0:c4:0d"
