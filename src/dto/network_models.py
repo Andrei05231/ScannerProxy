@@ -12,6 +12,7 @@ class ProtocolConstants:
     """Constants for the scanner protocol - SRP: Single responsibility for constants"""
     SIGNATURE: bytes = b'\x55\x00\x00'
     TYPE_OF_REQUEST: bytes = b'\x5a\x00\x00'
+    TYPE_OF_FILE_TRANSFER: bytes = b'\x5a\x54\x00'  # New request type for file transfer
     EXPECTED_MESSAGE_SIZE: int = 90
     SRC_NAME_SIZE: int = 20
     DST_NAME_SIZE: int = 40

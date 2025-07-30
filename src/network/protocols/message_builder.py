@@ -52,6 +52,11 @@ class ScannerProtocolMessageBuilder:
         self._type_of_request = b'\x5a\x00\x00'
         return self
     
+    def with_file_transfer_request(self) -> "ScannerProtocolMessageBuilder":
+        """Configure for file transfer request - Type: 5a 54 00"""
+        self._type_of_request = b'\x5a\x54\x00'
+        return self
+    
     def with_all_reserved1_zeros(self) -> "ScannerProtocolMessageBuilder":
         """Set reserved1 to all zeros"""
         ProtocolConstants = get_protocol_constants()
@@ -104,6 +109,17 @@ class ScannerProtocolMessageBuilder:
                 .with_all_reserved2_zeros()
                 .with_src_name(src_name)
                 .with_all_others_zeros()
+                .build())
+    
+    def build_file_transfer_message(self, local_ip: str, src_name: str = "Scanner", dst_name: str = "") -> "ScannerProtocolMessage":
+        """Build a file transfer message with the specified parameters"""
+        return (self.reset()
+                .with_file_transfer_request()
+                .with_all_reserved1_zeros()
+                .with_initiator_ip(local_ip)
+                .with_all_reserved2_zeros()
+                .with_src_name(src_name)
+                .with_dst_name(dst_name)
                 .build())
     
     def build(self) -> "ScannerProtocolMessage":

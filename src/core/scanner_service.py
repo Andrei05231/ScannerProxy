@@ -3,11 +3,12 @@ Main scanner service orchestrator.
 Follows SRP - Single responsibility for coordinating scanner operations.
 Follows DIP - Depends on abstractions, not concretions.
 """
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 import logging
 
 from ..network.interfaces import NetworkInterfaceManager
 from ..network.discovery import AgentDiscoveryService
+from ..services.file_transfer import FileTransferService
 from ..dto.network_models import ScannerProtocolMessage
 from ..utils.config import config
 
@@ -25,6 +26,7 @@ class ScannerService:
         self.broadcast_ip: str = ""
         self.interface_name: str = ""
         self.discovery_service: AgentDiscoveryService = None
+        self.file_transfer_service: FileTransferService = None
         
     def initialize(self) -> None:
         """Initialize the scanner service"""
@@ -37,6 +39,12 @@ class ScannerService:
             self.discovery_service = AgentDiscoveryService(
                 local_ip=self.local_ip,
                 broadcast_ip=self.broadcast_ip,
+                port=udp_port
+            )
+            
+            # Initialize file transfer service
+            self.file_transfer_service = FileTransferService(
+                local_ip=self.local_ip,
                 port=udp_port
             )
             
@@ -70,6 +78,40 @@ class ScannerService:
         self.logger.info(f"Discovery completed. Found {len(discovered_agents)} agents.")
         
         return discovered_agents
+    
+    def send_file_transfer_request(self, target_ip: str, src_name: str = "Scanner", dst_name: str = "") -> Tuple[bool, Optional[ScannerProtocolMessage]]:
+        """
+        Send a file transfer request to a specific agent and wait for response
+        
+        Args:
+            target_ip: IP address of the target agent
+            src_name: Source name for the message
+            dst_name: Destination name for the message
+            
+        Returns:
+            Tuple of (success, response_message) where response_message is None if no response
+        """
+        if not self.file_transfer_service:
+            self.logger.error("File transfer service not initialized")
+            return False, None
+        
+        self.logger.info(f"Sending file transfer request to {target_ip}")
+        
+        success, response = self.file_transfer_service.send_file_transfer_request(
+            target_ip=target_ip,
+            src_name=src_name,
+            dst_name=dst_name
+        )
+        
+        if success:
+            if response:
+                self.logger.info(f"File transfer request sent successfully to {target_ip} with response")
+            else:
+                self.logger.info(f"File transfer request sent successfully to {target_ip} but no response received")
+        else:
+            self.logger.error(f"Failed to send file transfer request to {target_ip}")
+        
+        return success, response
     
     def get_network_status(self) -> Dict[str, Any]:
         """Get current network status information"""

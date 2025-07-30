@@ -118,9 +118,14 @@ def discover_agents_operation():
             selected_agent = select_agent(discovered_agents)
             
             if selected_agent:
-                # Here you can add further operations with the selected agent
-                # For now, just confirm the selection
-                console.print("\n[dim]Note: Further operations with the selected agent can be implemented here.[/dim]")
+                # Ask user what to do with the selected agent
+                next_action = agent_action_menu(selected_agent)
+                
+                if next_action == 'send_file':
+                    send_file_to_agent(scanner_service, selected_agent)
+                elif next_action == 'view_details':
+                    view_agent_details(selected_agent)
+                # 'back' option just continues to the end
         
     except Exception as e:
         logger.error(f"Scanner operation failed: {e}")
@@ -230,6 +235,112 @@ IP: {message.initiator_ip}
         return selected_agent
     
     return None
+
+
+def agent_action_menu(selected_agent):
+    """Menu for actions to perform with the selected agent"""
+    message, address = selected_agent
+    src_name = message.src_name.decode('ascii', errors='ignore')
+    
+    questions = [
+        inquirer.List(
+            'action',
+            message=f"What would you like to do with {src_name}?",
+            choices=[
+                ('Send File Transfer Request', 'send_file'),
+                ('View Agent Details', 'view_details'),
+                ('← Back to main menu', 'back')
+            ]
+        )
+    ]
+    
+    answers = inquirer.prompt(questions)
+    return answers['action'] if answers else 'back'
+
+
+def send_file_to_agent(scanner_service, selected_agent):
+    """Send file transfer request to the selected agent"""
+    message, address = selected_agent
+    src_name = message.src_name.decode('ascii', errors='ignore')
+    dst_name = message.dst_name.decode('ascii', errors='ignore')
+    
+    # Extract IP from address (format is usually "ip:port")
+    target_ip = address.split(':')[0] if ':' in address else address
+    
+    console.print(f"\n[bold cyan]Sending file transfer request to {src_name}...[/bold cyan]")
+    
+    with console.status("[bold green]Sending file transfer request...", spinner="dots"):
+        success, response = scanner_service.send_file_transfer_request(
+            target_ip=target_ip,
+            src_name="Scanner",
+            dst_name=dst_name
+        )
+    
+    if success:
+        if response:
+            # Got a response from the agent
+            response_src = response.src_name.decode('ascii', errors='ignore')
+            response_dst = response.dst_name.decode('ascii', errors='ignore')
+            panel = Panel(
+                f"[green]✓ File transfer request sent successfully![/green]\n\n"
+                f"Target: {src_name} ({target_ip})\n"
+                f"Network Address: {address}\n"
+                f"Request Type: File Transfer (0x5A5400)\n"
+                f"Status: Message delivered via UDP\n\n"
+                f"[bold cyan]Response Received:[/bold cyan]\n"
+                f"From: {response_src}\n"
+                f"To: {response_dst}\n"
+                f"Response Type: {response.type_of_request.hex()}",
+                title="[bold green]Transfer Request Sent & Response Received[/bold green]",
+                border_style="green"
+            )
+        else:
+            # Request sent but no response received
+            panel = Panel(
+                f"[green]✓ File transfer request sent successfully![/green]\n\n"
+                f"Target: {src_name} ({target_ip})\n"
+                f"Network Address: {address}\n"
+                f"Request Type: File Transfer (0x5A5400)\n"
+                f"Status: Message delivered via UDP\n\n"
+                f"[yellow]⚠ No response received from agent[/yellow]",
+                title="[bold green]Transfer Request Sent[/bold green]",
+                border_style="green"
+            )
+    else:
+        panel = Panel(
+            f"[red]✗ Failed to send file transfer request[/red]\n\n"
+            f"Target: {src_name} ({target_ip})\n"
+            f"Network Address: {address}\n"
+            f"Please check network connection and try again.",
+            title="[bold red]Transfer Request Failed[/bold red]",
+            border_style="red"
+        )
+    
+    console.print(panel)
+    console.input("\n[dim]Press Enter to continue...[/dim]")
+
+
+def view_agent_details(selected_agent):
+    """Display detailed information about the selected agent"""
+    message, address = selected_agent
+    src_name = message.src_name.decode('ascii', errors='ignore')
+    dst_name = message.dst_name.decode('ascii', errors='ignore')
+    
+    # Create a detailed table
+    details_table = Table(title=f"Agent Details: {src_name}")
+    details_table.add_column("Property", style="cyan", no_wrap=True)
+    details_table.add_column("Value", style="white")
+    
+    details_table.add_row("Source Name", src_name)
+    details_table.add_row("Destination Name", dst_name)
+    details_table.add_row("IP Address", str(message.initiator_ip))
+    details_table.add_row("Network Address", address)
+    details_table.add_row("Signature", message.signature.hex())
+    details_table.add_row("Type of Request", message.type_of_request.hex())
+    details_table.add_row("Message Size", f"{len(message.to_bytes())} bytes")
+    
+    console.print(details_table)
+    console.input("\n[dim]Press Enter to continue...[/dim]")
 
 
 def main():
