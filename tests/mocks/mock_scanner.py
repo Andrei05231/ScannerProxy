@@ -92,7 +92,7 @@ def discover_agents_operation():
             logger.error(f"Scanner initialization failed: {e}")
             console.print(f"[bold red]Error:[/bold red] {e}")
             return
-            
+    
     # Create network info table
     table = Table(title="Network Information")
     table.add_column("Property", style="cyan", no_wrap=True)
@@ -110,7 +110,17 @@ def discover_agents_operation():
             discovered_agents = scanner_service.discover_agents()
             
             # Print summary with rich formatting
-            print_discovery_summary(discovered_agents)
+            agents_found = print_discovery_summary(discovered_agents)
+            
+            # If agents were found, allow user to select one
+            if agents_found:
+                console.print("\n")
+                selected_agent = select_agent(discovered_agents)
+                
+                if selected_agent:
+                    # Here you can add further operations with the selected agent
+                    # For now, just confirm the selection
+                    console.print("\n[dim]Note: Further operations with the selected agent can be implemented here.[/dim]")
             
         except Exception as e:
             logger.error(f"Scanner operation failed: {e}")
@@ -118,7 +128,7 @@ def discover_agents_operation():
     
     console.input("\n[dim]Press Enter to return to main menu...[/dim]")
 
-
+    
 def setup_logging():
     """Setup logging configuration"""
     log_level = config.get('logging.level', 'INFO')
@@ -153,6 +163,7 @@ def print_discovery_summary(discovered_agents):
             )
         
         console.print(agents_table)
+        return True
     else:
         panel = Panel(
             "No agents discovered on the network listening for scanned documents.",
@@ -160,6 +171,63 @@ def print_discovery_summary(discovered_agents):
             border_style="yellow"
         )
         console.print(panel)
+        return False
+
+
+def select_agent(discovered_agents):
+    """Allow user to select one of the discovered agents"""
+    if not discovered_agents:
+        return None
+    
+    # Create choices for inquirer
+    choices = []
+    for i, (message, address) in enumerate(discovered_agents):
+        src_name = message.src_name.decode('ascii', errors='ignore')
+        dst_name = message.dst_name.decode('ascii', errors='ignore')
+        choice_text = f"{src_name} at {address} (→ {dst_name})"
+        choices.append((choice_text, i))
+    
+    # Add option to go back
+    choices.append(("← Back to main menu", -1))
+    
+    questions = [
+        inquirer.List(
+            'selected_agent',
+            message="Select an agent to connect to",
+            choices=choices
+        )
+    ]
+    
+    answers = inquirer.prompt(questions)
+    if answers and answers['selected_agent'] != -1:
+        selected_index = answers['selected_agent']
+        selected_agent = discovered_agents[selected_index]
+        
+        # Display selected agent details
+        message, address = selected_agent
+        src_name = message.src_name.decode('ascii', errors='ignore')
+        dst_name = message.dst_name.decode('ascii', errors='ignore')
+        
+        # Create detailed info panel
+        info_text = f"""[bold]Selected Agent Details:[/bold]
+        
+Address: {address}
+Source Name: {src_name}
+Destination Name: {dst_name}
+IP: {message.initiator_ip}
+        
+[green]✓ Agent selected successfully![/green]"""
+        
+        panel = Panel(
+            info_text,
+            title="[bold green]Agent Selection[/bold green]",
+            border_style="green"
+        )
+        console.print(panel)
+        
+        return selected_agent
+    
+    return None
 
 
 def main():
