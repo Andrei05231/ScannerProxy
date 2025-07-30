@@ -20,7 +20,7 @@ def main():
     
     try:
         # Import and run the main application
-        from src.main import main as app_main
+        from main import main as app_main
         return app_main()
     except Exception as e:
         print(f"Error running application: {e}")
