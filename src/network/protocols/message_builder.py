@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...dto.network_models import ScannerProtocolMessage, ProtocolConstants
 
+from ...utils.config import config
+
 def get_protocol_constants():
     from ...dto.network_models import ProtocolConstants
     return ProtocolConstants
@@ -111,8 +113,11 @@ class ScannerProtocolMessageBuilder:
                 .with_all_others_zeros()
                 .build())
     
-    def build_file_transfer_message(self, local_ip: str, src_name: str = "Scanner", dst_name: str = "") -> "ScannerProtocolMessage":
+    def build_file_transfer_message(self, local_ip: str, src_name: str = None, dst_name: str = "") -> "ScannerProtocolMessage":
         """Build a file transfer message with the specified parameters"""
+        if src_name is None:
+            src_name = config.get('scanner.default_src_name', 'Scanner')
+            
         return (self.reset()
                 .with_file_transfer_request()
                 .with_all_reserved1_zeros()

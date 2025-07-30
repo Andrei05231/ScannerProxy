@@ -8,6 +8,7 @@ import time
 
 from ..dto.network_models import ScannerProtocolMessage
 from ..network.protocols.message_builder import ScannerProtocolMessageBuilder
+from ..utils.config import config
 
 
 class AgentDiscoveryService:
@@ -18,17 +19,23 @@ class AgentDiscoveryService:
         self.broadcast_ip = broadcast_ip
         self.port = port
     
-    def discover_agents(self, timeout: float = 10.0, src_name: str = "Scanner") -> List[Tuple[ScannerProtocolMessage, str]]:
+    def discover_agents(self, timeout: float = None, src_name: str = None) -> List[Tuple[ScannerProtocolMessage, str]]:
         """
         Discover agents on the network that are listening for scanned documents.
         
         Args:
-            timeout: How long to listen for responses
-            src_name: Source name to include in the discovery message
+            timeout: How long to listen for responses (uses config default if None)
+            src_name: Source name to include in the discovery message (uses config default if None)
             
         Returns:
-            List of tuples containing (response_message, sender_address)
+            List of tuples containing (response_message, address)
         """
+        # Use config defaults if not provided
+        if timeout is None:
+            timeout = config.get('network.discovery_timeout', 10.0)
+        if src_name is None:
+            src_name = config.get('scanner.default_src_name', 'Scanner')
+            
         responses = []
         
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -69,7 +76,7 @@ class AgentDiscoveryService:
         
         while time.time() - start_time < timeout:
             try:
-                resp, addr = sock.recvfrom(1024)
+                resp, addr = sock.recvfrom(config.get('network.buffer_size', 1024))
                 response_count += 1
                 
                 print(f"=== RESPONSE #{response_count} FROM {addr[0]}:{addr[1]} ===")

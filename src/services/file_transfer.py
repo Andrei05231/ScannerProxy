@@ -11,6 +11,7 @@ from ipaddress import IPv4Address
 
 from ..dto.network_models import ScannerProtocolMessage, ProtocolConstants
 from ..network.protocols.message_builder import ScannerProtocolMessageBuilder
+from ..utils.config import config
 
 
 class FileTransferService:
@@ -33,22 +34,30 @@ class FileTransferService:
         self.tcp_port = tcp_port
         self.logger = logging.getLogger(__name__)
     
-    def send_file_transfer_request(self, target_ip: str, src_name: str = "Scanner", dst_name: str = "", timeout: float = 5.0, file_path: str = "scan.raw") -> Tuple[bool, Optional[ScannerProtocolMessage]]:
+    def send_file_transfer_request(self, target_ip: str, src_name: str = None, dst_name: str = "", timeout: float = None, file_path: str = None) -> Tuple[bool, Optional[ScannerProtocolMessage]]:
         """
         Send a file transfer request to a specific agent and wait for response
         
         Args:
             target_ip: IP address of the target agent
-            src_name: Source name for the message
+            src_name: Source name for the message (uses config default if None)
             dst_name: Destination name for the message
-            timeout: How long to wait for response
-            file_path: Path to the file to send (default: scan.raw)
+            timeout: How long to wait for response (uses config default if None)
+            file_path: Path to the file to send (uses config default if None)
             
         Returns:
             Tuple of (success, response_message) where response_message is None if no response
         """
+        # Use config defaults if not provided
+        if src_name is None:
+            src_name = config.get('scanner.default_src_name', 'Scanner')
+        if timeout is None:
+            timeout = config.get('network.discovery_timeout', 5.0)
+        if file_path is None:
+            file_path = config.get('scanner.default_file_path', 'scan.raw')
+            
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(1.0)
+        sock.settimeout(config.get('network.socket_timeout', 1.0))
         
         try:
             # Bind to local IP and port 706 for consistency
@@ -101,7 +110,7 @@ class FileTransferService:
         
         while time.time() - start_time < timeout:
             try:
-                resp, addr = sock.recvfrom(1024)
+                resp, addr = sock.recvfrom(config.get('network.buffer_size', 1024))
                 
                 # Only accept responses from the target IP
                 if addr[0] == target_ip:
@@ -122,18 +131,24 @@ class FileTransferService:
                 
         return None
 
-    def _initiate_tcp_connection(self, target_ip: str, connection_timeout: float = 10.0, file_path: str = "scan.raw") -> bool:
+    def _initiate_tcp_connection(self, target_ip: str, connection_timeout: float = None, file_path: str = None) -> bool:
         """
         Initiate TCP connection on port 708 for actual file transfer
         
         Args:
             target_ip: IP address of the target agent
-            connection_timeout: Timeout for TCP connection establishment
-            file_path: Path to the file to send (default: scan.raw)
+            connection_timeout: Timeout for TCP connection establishment (uses config default if None)
+            file_path: Path to the file to send (uses config default if None)
             
         Returns:
             True if connection and file transfer successful, False otherwise
         """
+        # Use config defaults if not provided
+        if connection_timeout is None:
+            connection_timeout = config.get('network.tcp_connection_timeout', 10.0)
+        if file_path is None:
+            file_path = config.get('scanner.default_file_path', 'scan.raw')
+            
         tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tcp_sock.settimeout(connection_timeout)
         
@@ -146,13 +161,13 @@ class FileTransferService:
             self.logger.info(f"TCP connection established with {target_ip}:{self.tcp_port}")
             
             # Send a simple handshake message
-            handshake_message = b"FILE_TRANSFER_READY"
+            handshake_message = config.get('file_transfer.handshake_message', 'FILE_TRANSFER_READY').encode()
             tcp_sock.send(handshake_message)
             self.logger.info(f"Sent handshake message: {handshake_message.decode()}")
             
             # Wait for acknowledgment
             try:
-                ack_response = tcp_sock.recv(1024)
+                ack_response = tcp_sock.recv(config.get('network.buffer_size', 1024))
                 self.logger.info(f"Received TCP handshake response: {ack_response}")
                 
                 if ack_response:
@@ -215,13 +230,14 @@ class FileTransferService:
             self.logger.info(f"Sent file size: {file_size} bytes")
             
             # Wait for size acknowledgment
-            size_ack = tcp_sock.recv(1024)
-            if b"SIZE_OK" not in size_ack:
+            size_ack = tcp_sock.recv(config.get('network.buffer_size', 1024))
+            size_ok_message = config.get('file_transfer.size_ok_message', 'SIZE_OK')
+            if size_ok_message.encode() not in size_ack:
                 self.logger.error("Agent did not acknowledge file size")
                 return False
             
             # Send file contents in chunks
-            chunk_size = 8192  # 8KB chunks
+            chunk_size = config.get('network.tcp_chunk_size', 8192)
             bytes_sent = 0
             
             with open(file_path, 'rb') as file:
@@ -239,13 +255,15 @@ class FileTransferService:
                         self.logger.info(f"File transfer progress: {bytes_sent}/{file_size} bytes ({progress:.1f}%)")
             
             # Send end-of-file marker
-            eof_message = b"FILE_TRANSFER_COMPLETE"
+            complete_message = config.get('file_transfer.complete_message', 'FILE_TRANSFER_COMPLETE')
+            eof_message = complete_message.encode()
             tcp_sock.send(eof_message)
             
             # Wait for transfer completion acknowledgment
-            completion_ack = tcp_sock.recv(1024)
+            completion_ack = tcp_sock.recv(config.get('network.buffer_size', 1024))
+            transfer_ok_message = config.get('file_transfer.transfer_ok_message', 'TRANSFER_OK')
             
-            if b"TRANSFER_OK" in completion_ack:
+            if transfer_ok_message.encode() in completion_ack:
                 self.logger.info(f"File transfer completed successfully: {bytes_sent} bytes sent")
                 return True
             else:

@@ -57,11 +57,21 @@ class ConfigurationManager:
                 "udp_port": 706,
                 "tcp_port": 708,
                 "discovery_timeout": 10.0,
-                "socket_timeout": 1.0
+                "socket_timeout": 1.0,
+                "buffer_size": 1024,
+                "tcp_chunk_size": 8192,
+                "tcp_connection_timeout": 10.0
             },
             "scanner": {
                 "default_src_name": "Scanner",
-                "max_retry_attempts": 3
+                "max_retry_attempts": 3,
+                "default_file_path": "scan.raw"
+            },
+            "file_transfer": {
+                "handshake_message": "FILE_TRANSFER_READY",
+                "size_ok_message": "SIZE_OK",
+                "complete_message": "FILE_TRANSFER_COMPLETE",
+                "transfer_ok_message": "TRANSFER_OK"
             },
             "logging": {
                 "level": "INFO",

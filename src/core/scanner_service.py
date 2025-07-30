@@ -81,15 +81,15 @@ class ScannerService:
         
         return discovered_agents
     
-    def send_file_transfer_request(self, target_ip: str, src_name: str = "Scanner", dst_name: str = "", file_path: str = "scan.raw") -> Tuple[bool, Optional[ScannerProtocolMessage]]:
+    def send_file_transfer_request(self, target_ip: str, src_name: str = None, dst_name: str = "", file_path: str = None) -> Tuple[bool, Optional[ScannerProtocolMessage]]:
         """
         Send a file transfer request to a specific agent and wait for response
         
         Args:
             target_ip: IP address of the target agent
-            src_name: Source name for the message
+            src_name: Source name for the message (uses config default if None)
             dst_name: Destination name for the message
-            file_path: Path to the file to send (default: scan.raw)
+            file_path: Path to the file to send (uses config default if None)
             
         Returns:
             Tuple of (success, response_message) where response_message is None if no response
@@ -97,6 +97,12 @@ class ScannerService:
         if not self.file_transfer_service:
             self.logger.error("File transfer service not initialized")
             return False, None
+        
+        # Use config defaults if not provided
+        if src_name is None:
+            src_name = config.get('scanner.default_src_name', 'Scanner')
+        if file_path is None:
+            file_path = config.get('scanner.default_file_path', 'scan.raw')
         
         self.logger.info(f"Sending file transfer request to {target_ip} for file {file_path}")
         

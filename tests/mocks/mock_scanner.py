@@ -267,8 +267,8 @@ def send_file_to_agent(scanner_service, selected_agent):
     # Extract IP from address (format is usually "ip:port")
     target_ip = address.split(':')[0] if ':' in address else address
     
-    # Default file to send
-    file_to_send = "scan.raw"
+    # Get default file from configuration
+    file_to_send = config.get('scanner.default_file_path', 'scan.raw')
     
     console.print(f"\n[bold cyan]Sending file transfer request to {src_name}...[/bold cyan]")
     console.print(f"[dim]File to send: {file_to_send}[/dim]")
@@ -276,7 +276,6 @@ def send_file_to_agent(scanner_service, selected_agent):
     with console.status("[bold green]Sending file transfer request...", spinner="dots"):
         success, response = scanner_service.send_file_transfer_request(
             target_ip=target_ip,
-            src_name="Scanner",
             dst_name=dst_name,
             file_path=file_to_send
         )
@@ -298,7 +297,7 @@ def send_file_to_agent(scanner_service, selected_agent):
                 f"To: {response_dst}\n"
                 f"Response Type: {response.type_of_request.hex()}\n\n"
                 f"[bold yellow]TCP File Transfer:[/bold yellow]\n"
-                f"Initiated TCP connection on port 708\n"
+                f"Initiated TCP connection on port {config.get('network.tcp_port', 708)}\n"
                 f"File transfer protocol: handshake → size → data → completion",
                 title="[bold green]File Transfer Completed[/bold green]",
                 border_style="green"
