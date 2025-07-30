@@ -34,7 +34,7 @@ class FileTransferService:
         self.tcp_port = tcp_port
         self.logger = logging.getLogger(__name__)
     
-    def send_file_transfer_request(self, target_ip: str, src_name: str = None, dst_name: str = "", timeout: float = None, file_path: str = None) -> Tuple[bool, Optional[ScannerProtocolMessage]]:
+    def send_file_transfer_request(self, target_ip: str, src_name: str = None, dst_name: str = "", timeout: float = None, file_path: str = None, progress_callback=None) -> Tuple[bool, Optional[ScannerProtocolMessage]]:
         """
         Send a file transfer request to a specific agent and wait for response
         
@@ -44,6 +44,7 @@ class FileTransferService:
             dst_name: Destination name for the message
             timeout: How long to wait for response (uses config default if None)
             file_path: Path to the file to send (uses config default if None)
+            progress_callback: Optional callback function for progress updates
             
         Returns:
             Tuple of (success, response_message) where response_message is None if no response
@@ -79,7 +80,7 @@ class FileTransferService:
                 self.logger.info(f"Received UDP response from {target_ip}, initiating TCP connection on port {self.tcp_port}")
                 
                 # Initiate TCP connection for actual file transfer
-                tcp_success = self._initiate_tcp_connection(target_ip, file_path=file_path)
+                tcp_success = self._initiate_tcp_connection(target_ip, file_path=file_path, progress_callback=progress_callback)
                 
                 if tcp_success:
                     self.logger.info(f"TCP connection and file transfer completed successfully with {target_ip}:{self.tcp_port}")
@@ -131,7 +132,7 @@ class FileTransferService:
                 
         return None
 
-    def _initiate_tcp_connection(self, target_ip: str, connection_timeout: float = None, file_path: str = None) -> bool:
+    def _initiate_tcp_connection(self, target_ip: str, connection_timeout: float = None, file_path: str = None, progress_callback=None) -> bool:
         """
         Initiate TCP connection on port 708 for actual file transfer
         
@@ -139,6 +140,7 @@ class FileTransferService:
             target_ip: IP address of the target agent
             connection_timeout: Timeout for TCP connection establishment (uses config default if None)
             file_path: Path to the file to send (uses config default if None)
+            progress_callback: Optional callback function for progress updates
             
         Returns:
             True if connection and file transfer successful, False otherwise
@@ -161,7 +163,7 @@ class FileTransferService:
             self.logger.info(f"TCP connection established with {target_ip}:{self.tcp_port}")
             
             # Send the file immediately after connection is established
-            file_sent = self._send_file_over_tcp(tcp_sock, file_path)
+            file_sent = self._send_file_over_tcp(tcp_sock, file_path, progress_callback)
             
             if file_sent:
                 self.logger.info(f"File {file_path} sent successfully to {target_ip}")
@@ -183,13 +185,14 @@ class FileTransferService:
             tcp_sock.close()
             self.logger.info(f"TCP connection closed with {target_ip}:{self.tcp_port}")
 
-    def _send_file_over_tcp(self, tcp_sock: socket.socket, file_path: str) -> bool:
+    def _send_file_over_tcp(self, tcp_sock: socket.socket, file_path: str, progress_callback=None) -> bool:
         """
         Send file contents over established TCP connection
         
         Args:
             tcp_sock: Established TCP socket
             file_path: Path to the file to send
+            progress_callback: Optional callback function for progress updates (bytes_sent, total_bytes)
             
         Returns:
             True if file sent successfully, False otherwise
@@ -217,11 +220,19 @@ class FileTransferService:
                     tcp_sock.sendall(chunk)
                     bytes_sent += len(chunk)
                     
-                    # Log progress periodically
-                    if bytes_sent % (chunk_size * 10) == 0:
+                    # Call progress callback if provided
+                    if progress_callback:
+                        progress_callback(bytes_sent, file_size)
+                    
+                    # Log progress periodically (less frequent now since we have visual progress)
+                    if bytes_sent % (chunk_size * 50) == 0:  # Log every ~400KB instead of every 80KB
                         progress = (bytes_sent / file_size) * 100
-                        self.logger.info(f"File transfer progress: {bytes_sent}/{file_size} bytes ({progress:.1f}%)")
+                        self.logger.debug(f"File transfer progress: {bytes_sent}/{file_size} bytes ({progress:.1f}%)")
             
+            # Final progress update
+            if progress_callback:
+                progress_callback(file_size, file_size)
+                
             self.logger.info(f"File transfer completed successfully: {bytes_sent} bytes sent")
             return True
                 

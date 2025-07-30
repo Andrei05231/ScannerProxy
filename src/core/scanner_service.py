@@ -81,7 +81,7 @@ class ScannerService:
         
         return discovered_agents
     
-    def send_file_transfer_request(self, target_ip: str, src_name: str = None, dst_name: str = "", file_path: str = None) -> Tuple[bool, Optional[ScannerProtocolMessage]]:
+    def send_file_transfer_request(self, target_ip: str, src_name: str = None, dst_name: str = "", file_path: str = None, progress_callback=None) -> Tuple[bool, Optional[ScannerProtocolMessage]]:
         """
         Send a file transfer request to a specific agent and wait for response
         
@@ -90,6 +90,7 @@ class ScannerService:
             src_name: Source name for the message (uses config default if None)
             dst_name: Destination name for the message
             file_path: Path to the file to send (uses config default if None)
+            progress_callback: Optional callback function for progress updates
             
         Returns:
             Tuple of (success, response_message) where response_message is None if no response
@@ -110,7 +111,8 @@ class ScannerService:
             target_ip=target_ip,
             src_name=src_name,
             dst_name=dst_name,
-            file_path=file_path
+            file_path=file_path,
+            progress_callback=progress_callback
         )
         
         if success:

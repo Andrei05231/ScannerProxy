@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn, TimeElapsedColumn, TransferSpeedColumn
 from rich import print as rprint
 
 # Add src to Python path for imports when running as script
@@ -250,7 +251,7 @@ def agent_action_menu(selected_agent):
 
 
 def select_file_to_send():
-    """Allow user to select a file from the files directory"""
+    """Let user select a file to send from the files directory"""
     import os
     
     files_dir = config.get('scanner.files_directory', 'files')
@@ -351,12 +352,80 @@ def send_file_to_agent(scanner_service, selected_agent):
     console.print(f"\n[bold cyan]Sending file transfer request to {src_name}...[/bold cyan]")
     console.print(f"[dim]File to send: {selected_file}[/dim]")
     
-    with console.status("[bold green]Sending file transfer request...", spinner="dots"):
-        success, response = scanner_service.send_file_transfer_request(
-            target_ip=target_ip,
-            dst_name=dst_name,
-            file_path=selected_file
-        )
+    # Get file size for progress bar
+    import os
+    if os.path.exists(selected_file):
+        file_size = os.path.getsize(selected_file)
+        file_size_str = format_file_size(file_size)
+        console.print(f"[dim]File size: {file_size_str}[/dim]")
+    else:
+        file_size = 0
+    
+    # Progress tracking variables
+    progress_data = {'bytes_sent': 0, 'file_size': file_size, 'task_id': None}
+    
+    def progress_callback(bytes_sent, total_bytes):
+        """Update progress bar"""
+        progress_data['bytes_sent'] = bytes_sent
+        if progress_data['task_id'] is not None and progress_data.get('progress'):
+            progress_data['progress'].update(progress_data['task_id'], completed=bytes_sent)
+    
+    # Create progress bar configuration
+    progress_columns = [
+        SpinnerColumn(),
+        TextColumn("[bold blue]Transferring", justify="right"),
+        BarColumn(bar_width=None),
+        TaskProgressColumn(),
+        "•",
+        TransferSpeedColumn(),
+        "•",
+        TimeElapsedColumn(),
+        "•",
+        TimeRemainingColumn(),
+    ]
+    
+    with Progress(*progress_columns, console=console, transient=False) as progress:
+        # Add progress tracking to the callback
+        progress_data['progress'] = progress
+        
+        # Start with UDP discovery phase
+        discovery_task = progress.add_task("Sending UDP request...", total=None)
+        
+        try:
+            success, response = scanner_service.send_file_transfer_request(
+                target_ip=target_ip,
+                dst_name=dst_name,
+                file_path=selected_file,
+                progress_callback=progress_callback
+            )
+            
+            # Remove discovery task
+            progress.remove_task(discovery_task)
+            
+            if success and response:
+                # UDP response received, now show file transfer progress
+                progress_data['task_id'] = progress.add_task(
+                    f"Sending {os.path.basename(selected_file)}", 
+                    total=file_size
+                )
+                
+                # The progress callback will update the progress bar during file transfer
+                # Wait a moment for the transfer to complete
+                import time
+                while progress_data['bytes_sent'] < file_size and progress_data['bytes_sent'] > 0:
+                    time.sleep(0.1)
+                
+            elif success and not response:
+                # UDP sent but no response
+                progress.add_task("No UDP response received", total=1, completed=1)
+            else:
+                # Failed to send UDP
+                progress.add_task("UDP request failed", total=1, completed=1)
+                
+        except Exception as e:
+            progress.remove_task(discovery_task)
+            console.print(f"[red]Error during file transfer: {e}[/red]")
+            return
     
     if success:
         if response:
