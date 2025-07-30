@@ -1,0 +1,21 @@
+# Network configuration
+network:
+  udp_port: 706
+  tcp_port: 708
+  discovery_timeout: 10.0
+  socket_timeout: 1.0
+
+# Scanner configuration  
+scanner:
+  default_src_name: "Scanner-Dev"
+  max_retry_attempts: 3
+
+# Logging configuration
+logging:
+  level: "DEBUG"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Agent configuration
+agents:
+  discovery_interval: 30.0  # seconds
+  max_agents: 10
