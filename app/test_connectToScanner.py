@@ -1,53 +1,66 @@
 import socket
-import time
 
-# Configuration (should match connectToScanner.py)
-scanner_ip = "172.30.166.131"  # IP of the service container
-listen_port = 706
-response_port = 706
+LOCAL_IP = "192.168.1.139"
+SERVER_IP = "192.168.1.138"
+BROADCAST_IP = "192.168.1.255"
+#SERVER_IP = "172.30.166.131"
+UDP_PORT = 706
+TCP_DST_PORT = 708
 
-
-# Example scanner packets (should match expected format)
-packet1_hex = """
-55 00 00 5a 00 00 00 09 b9 00 a5 2c 0a 00 34 74
+UDP_PAYLOAD = """
+55 00 00 5a 54 00 00 09 b9 00 a5 2c 0a 00 34 74
 00 00 00 00 4c 6d 33 36 00 00 00 00 00 00 00 00
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
-00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00 00 00
 """
 
-def parse_hex_dump(hex_string):
-    lines = hex_string.strip().splitlines()
-    cleaned_lines = []
-    for line in lines:
-        line = line.strip()
-        if line:
-            # Remove line number offset if present
-            line = line.split(' ', 1)[-1] if line[:4].isdigit() else line
-            cleaned_lines.append(line)
-    joined = " ".join(cleaned_lines)
-    hex_bytes = joined.replace(' ', '')
-    return bytes.fromhex(hex_bytes)
-
 if __name__ == "__main__":
-    # Create UDP socket
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     sock.settimeout(5)
-    local_ip = "172.30.175.74"  # IP of the test client
-    sock.bind((local_ip, listen_port))
+    sock.bind((LOCAL_IP, UDP_PORT))
 
-    # Send first scanner packet
-    packet_bytes1 = parse_hex_dump(packet1_hex)
-    print(f"Sending first scanner packet to {scanner_ip}:{listen_port}...")
-    sock.sendto(packet_bytes1, (scanner_ip, listen_port))
+    # Initialize Discovery
+#    udp_packet_bytes = bytes.fromhex(UDP_PAYLOAD)
+#    print(f"Sending UDP scanner packet to {SERVER_IP}:{UDP_PORT}...")
+#    sock.sendto(udp_packet_bytes, (BROADCAST_IP, UDP_PORT))
+#
+#    try:
+#        resp, addr = sock.recvfrom(1024)
+#        print(f"Received response to first packet from {addr}: {resp.hex()}")
+#    except socket.timeout:
+#        print("No response received from service to first packet.")
+#        sock.close()
+#        exit(1)
 
-    # Wait for first response
+    # Initialize Communication
+    udp_packet_bytes = bytes.fromhex(UDP_PAYLOAD)
+    print(f"Sending UDP scanner packet to {SERVER_IP}:{UDP_PORT}...")
+    sock.sendto(udp_packet_bytes, (SERVER_IP, UDP_PORT))
+
     try:
-        resp1, addr1 = sock.recvfrom(1024)
-        print(f"Received response to first packet from {addr1}: {resp1.hex()}")
+        resp, addr = sock.recvfrom(1024)
+        print(f"Received response to first packet from {addr}: {resp.hex()}")
     except socket.timeout:
         print("No response received from service to first packet.")
         sock.close()
         exit(1)
+
+    # Start TCP communication
+
+    # This sends a SYN to the server and waits for SYN-ACK
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(2)
+
+    try:
+        sock.connect((SERVER_IP, TCP_DST_PORT))  # Target IP and port
+        print("Connected!")  # SYN -> SYN-ACK -> ACK completed
+    except socket.timeout:
+        print("Connection timed out (no SYN-ACK?)")
+    except Exception as e:
+        print("Connection failed:", e)
+
+    sock.close()
