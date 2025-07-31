@@ -7,14 +7,16 @@ import sys
 import socket
 import threading
 import time
+import mimetypes
 from pathlib import Path
+from typing import Optional, List, Tuple, Any
 import inquirer
+import humanize
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn, TimeElapsedColumn, TransferSpeedColumn
-from rich import print as rprint
 
 # Add src to Python path for imports when running as script
 if __name__ == "__main__":
@@ -265,26 +267,37 @@ def agent_action_menu(selected_agent):
 
 def select_file_to_send():
     """Let user select a file to send from the files directory"""
-    import os
-    
-    files_dir = config.get('scanner.files_directory', 'files')
+    files_dir = Path(config.get('scanner.files_directory', 'files'))
     
     # Check if files directory exists
-    if not os.path.exists(files_dir):
+    if not files_dir.exists():
         console.print(f"[red]Files directory '{files_dir}' does not exist![/red]")
         return None
     
-    # Get list of files in the directory
+    # Get list of files in the directory with better type detection
     try:
-        all_files = os.listdir(files_dir)
-        # Filter for common file types (you can extend this list)
-        valid_extensions = ['.raw', '.pdf', '.jpg', '.jpeg', '.png', '.txt', '.doc', '.docx']
-        files = [f for f in all_files if os.path.isfile(os.path.join(files_dir, f)) and 
-                any(f.lower().endswith(ext) for ext in valid_extensions)]
+        # Common file types for scanner operations
+        valid_extensions = {'.raw', '.pdf', '.jpg', '.jpeg', '.png', '.txt', '.doc', '.docx', '.tiff', '.bmp', '.gif'}
+        
+        # Get all files and filter by type
+        all_files = list(files_dir.iterdir())
+        files = []
+        
+        for file_path in all_files:
+            if file_path.is_file():
+                # Check by extension first
+                if file_path.suffix.lower() in valid_extensions:
+                    files.append(file_path)
+                else:
+                    # Check by MIME type for better detection
+                    mime_type, _ = mimetypes.guess_type(str(file_path))
+                    if mime_type and any(mime_type.startswith(prefix) for prefix in ['image/', 'application/pdf', 'text/']):
+                        files.append(file_path)
         
         if not files:
             console.print(f"[yellow]No files found in '{files_dir}' directory![/yellow]")
-            console.print(f"[dim]Supported file types: {', '.join(valid_extensions)}[/dim]")
+            console.print(f"[dim]Supported file types: {', '.join(sorted(valid_extensions))}[/dim]")
+            console.print(f"[dim]Also supports files detected by MIME type (images, PDFs, text files)[/dim]")
             return None
         
         # Create file selection table
@@ -293,22 +306,20 @@ def select_file_to_send():
         files_table.add_column("File Name", style="white")
         files_table.add_column("Size", style="yellow")
         
-        for i, filename in enumerate(files, 1):
-            file_path = os.path.join(files_dir, filename)
-            file_size = os.path.getsize(file_path)
-            size_str = format_file_size(file_size)
-            files_table.add_row(str(i), filename, size_str)
+        for i, file_path in enumerate(files, 1):
+            file_size = file_path.stat().st_size
+            size_str = humanize.naturalsize(file_size)
+            files_table.add_row(str(i), file_path.name, size_str)
         
         console.print(files_table)
         
         # Create choices for inquirer
         choices = []
-        for i, filename in enumerate(files):
-            file_path = os.path.join(files_dir, filename)
-            file_size = os.path.getsize(file_path)
-            size_str = format_file_size(file_size)
-            choice_text = f"{filename} ({size_str})"
-            choices.append((choice_text, os.path.join(files_dir, filename)))
+        for file_path in files:
+            file_size = file_path.stat().st_size
+            size_str = humanize.naturalsize(file_size)
+            choice_text = f"{file_path.name} ({size_str})"
+            choices.append((choice_text, str(file_path)))
         
         # Add option to cancel
         choices.append(("← Cancel", None))
@@ -336,18 +347,6 @@ def select_file_to_send():
         return None
 
 
-def format_file_size(size_bytes):
-    """Format file size in human readable format"""
-    if size_bytes == 0:
-        return "0 B"
-    size_names = ["B", "KB", "MB", "GB"]
-    i = 0
-    while size_bytes >= 1024 and i < len(size_names) - 1:
-        size_bytes /= 1024.0
-        i += 1
-    return f"{size_bytes:.1f} {size_names[i]}"
-
-
 def send_file_to_agent(scanner_service, selected_agent):
     """Send file transfer request to the selected agent"""
     message, address = selected_agent
@@ -365,11 +364,11 @@ def send_file_to_agent(scanner_service, selected_agent):
     console.print(f"\n[bold cyan]Sending file transfer request to {src_name}...[/bold cyan]")
     console.print(f"[dim]File to send: {selected_file}[/dim]")
     
-    # Get file size for progress bar
-    import os
-    if os.path.exists(selected_file):
-        file_size = os.path.getsize(selected_file)
-        file_size_str = format_file_size(file_size)
+    # Get file size for progress bar using pathlib
+    selected_path = Path(selected_file)
+    if selected_path.exists():
+        file_size = selected_path.stat().st_size
+        file_size_str = humanize.naturalsize(file_size)
         console.print(f"[dim]File size: {file_size_str}[/dim]")
     else:
         file_size = 0
@@ -418,13 +417,12 @@ def send_file_to_agent(scanner_service, selected_agent):
             if success and response:
                 # UDP response received, now show file transfer progress
                 progress_data['task_id'] = progress.add_task(
-                    f"Sending {os.path.basename(selected_file)}", 
+                    f"Sending {Path(selected_file).name}", 
                     total=file_size
                 )
                 
                 # The progress callback will update the progress bar during file transfer
                 # Wait a moment for the transfer to complete
-                import time
                 while progress_data['bytes_sent'] < file_size and progress_data['bytes_sent'] > 0:
                     time.sleep(0.1)
                 
