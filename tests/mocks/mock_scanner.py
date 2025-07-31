@@ -566,8 +566,7 @@ class MetadataResponseServer:
             0x00, 0x00, 0x00
         ])
         
-        # The request pattern to match (00 00 00)
-        self.metadata_request_pattern = bytes([0x00, 0x00, 0x00])
+        # No signature checking - respond to any incoming message
     
     def start(self):
         """Start the metadata response server"""
@@ -605,15 +604,12 @@ class MetadataResponseServer:
             try:
                 data, addr = self.socket.recvfrom(1024)
                 
-                # Check if this is a metadata request (starts with 00 00 00)
-                if data.startswith(self.metadata_request_pattern):
-                    console.print(f"[cyan]Metadata request received from {addr[0]}:{addr[1]}[/cyan]")
-                    
-                    # Send the metadata response
-                    self.socket.sendto(self.metadata_response, addr)
-                    console.print(f"[green]Sent metadata response to {addr[0]}:{addr[1]} ({len(self.metadata_response)} bytes)[/green]")
-                else:
-                    console.print(f"[yellow]Non-metadata request from {addr[0]}:{addr[1]} (ignored)[/yellow]")
+                # Respond to any incoming message with the metadata payload
+                console.print(f"[cyan]Request received from {addr[0]}:{addr[1]} ({len(data)} bytes)[/cyan]")
+                
+                # Send the metadata response to any request
+                self.socket.sendto(self.metadata_response, addr)
+                console.print(f"[green]Sent metadata response to {addr[0]}:{addr[1]} ({len(self.metadata_response)} bytes)[/green]")
                     
             except socket.timeout:
                 # Timeout is expected - allows checking self.running
@@ -635,8 +631,8 @@ def metadata_response_operation():
     # Show information panel
     info_text = """[bold]Metadata Response Server[/bold]
 
-This server listens on UDP port 704 for metadata requests.
-When it receives a message starting with [cyan]00 00 00[/cyan], it responds with a predefined metadata payload.
+This server listens on UDP port 704 for any incoming messages.
+It responds to [bold]ALL[/bold] incoming messages with a predefined metadata payload.
 
 [green]Press Ctrl+C to stop the server and return to the main menu.[/green]"""
     
@@ -677,12 +673,13 @@ When it receives a message starting with [cyan]00 00 00[/cyan], it responds with
         status_table.add_row("Status", "Running")
         status_table.add_row("Port", str(server.port))
         status_table.add_row("Protocol", "UDP")
-        status_table.add_row("Request Pattern", "00 00 00")
+        status_table.add_row("Response Mode", "All Messages")
         status_table.add_row("Response Size", f"{len(server.metadata_response)} bytes")
         
         console.print(status_table)
         
-        console.print("\n[bold green]Server is running! Waiting for metadata requests...[/bold green]")
+        console.print("\n[bold green]Server is running! Waiting for any UDP messages...[/bold green]")
+        console.print("[dim]Will respond to ALL incoming messages with metadata payload[/dim]")
         console.print("[dim]Press Ctrl+C to stop the server[/dim]\n")
         
         # Keep the server running until user interrupts
