@@ -34,6 +34,9 @@ except ImportError:
 # Initialize rich console
 console = Console()
 
+# Global metadata server instance
+metadata_server = None
+
 
 def show_welcome():
     """Display welcome message with rich formatting"""
@@ -50,6 +53,12 @@ def show_welcome():
 
 def interactive_menu():
     """Interactive CLI menu using inquirer library"""
+    global metadata_server
+    
+    # Check if metadata server is running
+    metadata_status = "Running" if metadata_server and metadata_server.running else "Stopped"
+    metadata_option = f"Metadata Response Server ({metadata_status})"
+    
     questions = [
         inquirer.List(
             'operation',
@@ -57,7 +66,7 @@ def interactive_menu():
             choices=[
                 ('Dummy Operation', 'dummy'),
                 ('Discover Agents', 'discover'),
-                ('Metadata Response Server', 'metadata'),
+                (metadata_option, 'metadata'),
                 ('Exit', 'exit')
             ]
         )
@@ -626,76 +635,127 @@ class MetadataResponseServer:
 
 def metadata_response_operation():
     """Interactive metadata response server operation"""
+    global metadata_server
+    
     console.print("\n")
     
-    # Show information panel
-    info_text = """[bold]Metadata Response Server[/bold]
-
-This server listens on UDP port 704 for any incoming messages.
-It responds to [bold]ALL[/bold] incoming messages with a predefined metadata payload.
-
-[green]Press Ctrl+C to stop the server and return to the main menu.[/green]"""
+    # Check current server status
+    is_running = metadata_server and metadata_server.running
     
-    panel = Panel(
-        info_text,
-        title="[bold blue]Metadata Server Information[/bold blue]",
-        border_style="blue"
-    )
-    console.print(panel)
-    
-    # Ask if user wants to start the server
-    questions = [
-        inquirer.Confirm(
-            'start_server',
-            message="Start the metadata response server?",
-            default=True
+    if is_running:
+        # Server is running - offer to stop it
+        info_text = """[bold]Metadata Response Server[/bold]
+
+The metadata server is currently [bold green]RUNNING[/bold green] on UDP port 704.
+It responds to ALL incoming messages with a predefined metadata payload.
+
+[yellow]Select an action below:[/yellow]"""
+        
+        panel = Panel(
+            info_text,
+            title="[bold green]Metadata Server - Running[/bold green]",
+            border_style="green"
         )
-    ]
-    
-    answers = inquirer.prompt(questions)
-    if not answers or not answers['start_server']:
-        return
-    
-    # Create and start server
-    server = MetadataResponseServer()
-    
-    if not server.start():
-        console.print("[bold red]Failed to start metadata server![/bold red]")
-        console.input("\n[dim]Press Enter to return to main menu...[/dim]")
-        return
-    
-    try:
+        console.print(panel)
+        
         # Show server status
-        status_table = Table(title="Server Status")
+        status_table = Table(title="Current Server Status")
         status_table.add_column("Property", style="cyan", no_wrap=True)
         status_table.add_column("Value", style="green")
         
         status_table.add_row("Status", "Running")
-        status_table.add_row("Port", str(server.port))
+        status_table.add_row("Port", str(metadata_server.port))
         status_table.add_row("Protocol", "UDP")
         status_table.add_row("Response Mode", "All Messages")
-        status_table.add_row("Response Size", f"{len(server.metadata_response)} bytes")
+        status_table.add_row("Response Size", f"{len(metadata_server.metadata_response)} bytes")
         
         console.print(status_table)
         
-        console.print("\n[bold green]Server is running! Waiting for any UDP messages...[/bold green]")
-        console.print("[dim]Will respond to ALL incoming messages with metadata payload[/dim]")
-        console.print("[dim]Press Ctrl+C to stop the server[/dim]\n")
+        # Ask if user wants to stop the server
+        questions = [
+            inquirer.List(
+                'action',
+                message="What would you like to do?",
+                choices=[
+                    ('Stop Metadata Server', 'stop'),
+                    ('← Back to main menu', 'back')
+                ]
+            )
+        ]
         
-        # Keep the server running until user interrupts
-        while server.running:
-            time.sleep(0.5)
+        answers = inquirer.prompt(questions)
+        if answers and answers['action'] == 'stop':
+            console.print("\n[yellow]Stopping metadata server...[/yellow]")
+            metadata_server.stop()
+            metadata_server = None
+            console.print("[bold green]Metadata server stopped successfully![/bold green]")
+            console.input("\n[dim]Press Enter to return to main menu...[/dim]")
+    
+    else:
+        # Server is not running - offer to start it
+        info_text = """[bold]Metadata Response Server[/bold]
+
+The metadata server is currently [bold red]STOPPED[/bold red].
+When started, it will listen on UDP port 704 and respond to ALL incoming messages 
+with a predefined metadata payload.
+
+[yellow]Select an action below:[/yellow]"""
+        
+        panel = Panel(
+            info_text,
+            title="[bold red]Metadata Server - Stopped[/bold red]",
+            border_style="red"
+        )
+        console.print(panel)
+        
+        # Ask if user wants to start the server
+        questions = [
+            inquirer.List(
+                'action',
+                message="What would you like to do?",
+                choices=[
+                    ('Start Metadata Server', 'start'),
+                    ('← Back to main menu', 'back')
+                ]
+            )
+        ]
+        
+        answers = inquirer.prompt(questions)
+        if answers and answers['action'] == 'start':
+            console.print("\n[yellow]Starting metadata server...[/yellow]")
             
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Stopping metadata server...[/yellow]")
-    finally:
-        server.stop()
-        console.print("[bold green]Metadata server stopped.[/bold green]")
-        console.input("\n[dim]Press Enter to return to main menu...[/dim]")
+            # Create and start server
+            metadata_server = MetadataResponseServer()
+            
+            if metadata_server.start():
+                # Show server status
+                status_table = Table(title="Server Started Successfully")
+                status_table.add_column("Property", style="cyan", no_wrap=True)
+                status_table.add_column("Value", style="green")
+                
+                status_table.add_row("Status", "Running")
+                status_table.add_row("Port", str(metadata_server.port))
+                status_table.add_row("Protocol", "UDP")
+                status_table.add_row("Response Mode", "All Messages")
+                status_table.add_row("Response Size", f"{len(metadata_server.metadata_response)} bytes")
+                
+                console.print(status_table)
+                
+                console.print("\n[bold green]Metadata server started successfully![/bold green]")
+                console.print("[dim]The server is now running in the background.[/dim]")
+                console.print("[dim]You can return to the main menu and use other functions.[/dim]")
+                console.print("[dim]Use the metadata option again to stop the server.[/dim]")
+            else:
+                console.print("[bold red]Failed to start metadata server![/bold red]")
+                metadata_server = None
+            
+            console.input("\n[dim]Press Enter to return to main menu...[/dim]")
 
 
 def main():
     """Main function with interactive CLI menu using rich and inquirer"""
+    global metadata_server
+    
     try:
         # Show welcome message
         show_welcome()
@@ -704,6 +764,11 @@ def main():
             selected_option = interactive_menu()
             
             if selected_option == 'exit':
+                # Clean up metadata server if running
+                if metadata_server and metadata_server.running:
+                    console.print("\n[yellow]Stopping metadata server before exit...[/yellow]")
+                    metadata_server.stop()
+                
                 console.print("\n[bold green]Thank you for using Scanner Proxy![/bold green]")
                 break
             elif selected_option == 'dummy':
@@ -716,9 +781,19 @@ def main():
         return 0
         
     except KeyboardInterrupt:
+        # Clean up metadata server on interrupt
+        if metadata_server and metadata_server.running:
+            console.print("\n[yellow]Stopping metadata server...[/yellow]")
+            metadata_server.stop()
+        
         console.print("\n[yellow]Operation cancelled by user.[/yellow]")
         return 1
     except Exception as e:
+        # Clean up metadata server on error
+        if metadata_server and metadata_server.running:
+            console.print("\n[yellow]Stopping metadata server due to error...[/yellow]")
+            metadata_server.stop()
+        
         console.print(f"[bold red]Unexpected error:[/bold red] {e}")
         return 1
 
