@@ -4,8 +4,8 @@ Configures file and console logging based on configuration settings.
 """
 import logging
 import logging.handlers
-import os
 from pathlib import Path
+import humanize
 from .config import config
 
 
@@ -36,13 +36,13 @@ def setup_logging() -> None:
     
     # Setup file logging if enabled
     if file_enabled:
-        # Ensure logs directory exists
+        # Ensure logs directory exists using pathlib
         log_file_path = Path(file_path)
         log_file_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Create rotating file handler
         file_handler = logging.handlers.RotatingFileHandler(
-            filename=file_path,
+            filename=str(log_file_path),
             maxBytes=max_file_size,
             backupCount=backup_count,
             encoding='utf-8'
@@ -90,20 +90,22 @@ def log_file_info() -> dict:
     Returns:
         Dictionary with log file information
     """
-    file_path = config.get('logging.file_path', 'logs/scanner.log')
+    file_path = Path(config.get('logging.file_path', 'logs/scanner.log'))
     
-    if os.path.exists(file_path):
-        stat = os.stat(file_path)
+    if file_path.exists():
+        stat = file_path.stat()
         return {
-            'path': file_path,
+            'path': str(file_path),
             'size': stat.st_size,
             'size_mb': round(stat.st_size / 1024 / 1024, 2),
+            'size_human': humanize.naturalsize(stat.st_size),
             'exists': True
         }
     else:
         return {
-            'path': file_path,
+            'path': str(file_path),
             'size': 0,
             'size_mb': 0.0,
+            'size_human': '0 B',
             'exists': False
         }

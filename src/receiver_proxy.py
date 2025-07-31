@@ -123,7 +123,19 @@ def run_sequence(iface, src_mac, dst_mac, src_ip, dst_ip,
 
     # Open file and send contents over TCP (raw)
     print(f"Sending file {file_to_send} over TCP...")
-    with open(file_to_send, 'rb') as f:
+    
+    from pathlib import Path
+    import humanize
+    
+    file_path = Path(file_to_send)
+    if not file_path.exists():
+        print(f"Error: File {file_to_send} does not exist")
+        return
+    
+    file_size = file_path.stat().st_size
+    print(f"File size: {humanize.naturalsize(file_size)}")
+    
+    with file_path.open('rb') as f:
         data = f.read()
 
     # Send data in batches of 1460 bytes (typical MSS)

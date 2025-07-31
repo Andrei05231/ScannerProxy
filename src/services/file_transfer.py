@@ -8,6 +8,8 @@ import logging
 import time
 from typing import Tuple, Optional, List
 from ipaddress import IPv4Address
+from pathlib import Path
+import humanize
 
 from ..dto.network_models import ScannerProtocolMessage, ProtocolConstants
 from ..network.protocols.message_builder import ScannerProtocolMessageBuilder
@@ -198,20 +200,20 @@ class FileTransferService:
             True if file sent successfully, False otherwise
         """
         try:
-            # Check if file exists
-            import os
-            if not os.path.exists(file_path):
+            # Check if file exists using pathlib
+            file_path_obj = Path(file_path)
+            if not file_path_obj.exists():
                 self.logger.error(f"File {file_path} does not exist")
                 return False
             
-            file_size = os.path.getsize(file_path)
-            self.logger.info(f"Preparing to send file {file_path} ({file_size} bytes)")
+            file_size = file_path_obj.stat().st_size
+            self.logger.info(f"Preparing to send file {file_path} ({humanize.naturalsize(file_size)})")
             
             # Send file contents directly in chunks without protocol messages
             chunk_size = config.get('network.tcp_chunk_size', 8192)
             bytes_sent = 0
             
-            with open(file_path, 'rb') as file:
+            with file_path_obj.open('rb') as file:
                 while True:
                     chunk = file.read(chunk_size)
                     if not chunk:

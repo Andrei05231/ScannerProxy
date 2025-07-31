@@ -1,35 +1,53 @@
 import sys
 import struct
+import os
 import numpy as np
 from PIL import Image
 from datetime import datetime
-import os
+from pathlib import Path
+import humanize
 
-# Destination path setup
-fileDestination = os.environ['DESTINATION']
+# Destination path setup with better environment variable handling
+destination = Path.cwd() / "scans"  # Default fallback
+if "DESTINATION" in os.environ:
+    destination = Path('/srv/scans') / os.environ['DESTINATION']
+
 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-filePath = f'/srv/scans/{fileDestination}/converted_{timestamp}.png'
+file_path = destination / f'converted_{timestamp}.png'
 
 # Input check
 if len(sys.argv) < 2:
-    print("Usage: python convertRawData.py <input_file>")
+    print("Usage: python convert_raw_data.py <input_file>")
     sys.exit(1)
 
-file = sys.argv[1]
+input_file = Path(sys.argv[1])
+
+# Validate input file
+if not input_file.exists():
+    print(f"Error: Input file '{input_file}' does not exist")
+    sys.exit(1)
+
+# Create output directory
+file_path.parent.mkdir(parents=True, exist_ok=True)
 
 # Drift parameter (adjust if necessary)
 drift = 2
 
-# Read file
-with open(file, "rb") as f:
-    header = f.read(16)
-    if header[:4] != b'R2PP':
-        raise ValueError("Invalid header: Missing R2PP marker.")
+# Read file with better error handling
+try:
+    with input_file.open("rb") as f:
+        header = f.read(16)
+        if header[:4] != b'R2PP':
+            raise ValueError("Invalid header: Missing R2PP marker.")
 
-    line_size_bytes = struct.unpack("<I", header[12:16])[0]
-    print(f"Line size (from header): {line_size_bytes} bytes")
+        line_size_bytes = struct.unpack("<I", header[12:16])[0]
+        print(f"Line size (from header): {line_size_bytes} bytes")
+        print(f"Input file size: {humanize.naturalsize(input_file.stat().st_size)}")
 
-    data = f.read()
+        data = f.read()
+except IOError as e:
+    print(f"Error reading input file: {e}")
+    sys.exit(1)
 
 pixels = np.frombuffer(data, dtype=np.uint16)
 
@@ -97,7 +115,8 @@ new_height = int(height * scale_factor)
 image = image.resize((width, new_height), resample=Image.BICUBIC)
 
 # Save output
-image.save(filePath)
-print(f"Saved {mode} image to: {filePath}")
+image.save(file_path)
+print(f"Saved {mode} image to: {file_path}")
 print(f"Final image dimensions: {width} x {new_height}")
+print(f"Output file size: {humanize.naturalsize(file_path.stat().st_size)}")
 

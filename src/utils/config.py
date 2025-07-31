@@ -31,8 +31,12 @@ class ConfigurationManager:
             # Return default configuration
             return self._get_default_config()
         
-        with open(config_file, 'r') as f:
-            self._config_cache = yaml.safe_load(f)
+        try:
+            with config_file.open('r', encoding='utf-8') as f:
+                self._config_cache = yaml.safe_load(f)
+        except (yaml.YAMLError, IOError) as e:
+            # If config file is invalid, fall back to defaults
+            self._config_cache = self._get_default_config()
         
         return self._config_cache
     

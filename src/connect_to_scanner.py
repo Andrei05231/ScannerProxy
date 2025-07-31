@@ -6,6 +6,8 @@ from datetime import datetime
 import sys
 import threading
 import subprocess
+from pathlib import Path
+import humanize
 
 
 listening_enabled = threading.Event()
@@ -13,9 +15,18 @@ listening_enabled.set()
 
 sys.stdout.reconfigure(line_buffering=True)
 
-containerIp = os.environ[ 'CONT_IP' ]
-deviceName = os.environ['DEV_NAME']
-fileDestination = os.environ['DESTINATION']
+# Environment variable handling with better error checking
+try:
+    containerIp = os.environ['CONT_IP']
+    deviceName = os.environ['DEV_NAME']
+    fileDestination = os.environ['DESTINATION']
+except KeyError as e:
+    print(f"Missing required environment variable: {e}")
+    sys.exit(1)
+
+# Setup paths using pathlib
+scan_base_dir = Path('/srv/scans') / fileDestination
+scan_base_dir.mkdir(parents=True, exist_ok=True)
 
 # containerIp = '10.0.52.111'
 print('thisIsIP')
@@ -83,32 +94,39 @@ def create_response_packet(scanner_mac, scanner_ip, device_name=deviceName):
 from src.receiver_proxy import run_sequence
 
 def receive_scan_file(tcp_ip=containerIp, tcp_port=708):
-
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_file = f'/srv/scans/{fileDestination}/scan_{timestamp}.raw'
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
-
+    output_file = scan_base_dir / f'scan_{timestamp}.raw'
+    
     print(f"Listening for scan data on TCP port {tcp_port}...")
+    print(f"Output file: {output_file}")
+    
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_sock:
         print(f"Binding TCP socket to {tcp_ip}:{tcp_port}")
         tcp_sock.bind((tcp_ip, tcp_port))
         tcp_sock.listen(1)
         conn, addr = tcp_sock.accept()
         print(f"Scan connection from {addr}")
-        with conn, open(output_file, 'wb') as f:
+        
+        with conn, output_file.open('wb') as f:
+            bytes_received = 0
             while True:
                 data = conn.recv(4096)
                 if not data:
                     print("Scan data transfer complete.")
                     break
                 f.write(data)
+                bytes_received += len(data)
                 print(f"Received {len(data)} bytes")
+                
+        print(f"Scan complete. Received {humanize.naturalsize(bytes_received)}")
+        print(f"File saved: {output_file}")
 
-    print(f"Saved raw scan file as {output_file}")
     listening_enabled.clear()
 
     # Instead of running conversion script, run the sequence with correct args:
     print("Starting handshake and sending scan file over the network...")
+
+    return str(output_file)
 
     iface = "eth0"
     src_mac = "bc:24:11:b6:23:f8"
@@ -160,20 +178,29 @@ def receive_scan_file(tcp_ip=containerIp, tcp_port=708):
 
 
 def can_connect(ip, timeout=2):
+    """Check if an IP is reachable using ping with improved error handling."""
     try:
         # '-c 1' → send 1 ping
         # '-W timeout' → wait X seconds for response (Linux-specific)
         result = subprocess.run(
             ["ping", "-c", "1", "-W", str(timeout), ip],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
+            timeout=timeout + 1,  # Add buffer to subprocess timeout
+            check=False
         )
         if result.returncode == 0:
             print(f"Ping to {ip} succeeded")
             return True
         else:
-            print(f"Ping to {ip} failed")
+            print(f"Ping to {ip} failed (return code: {result.returncode})")
             return False
+    except subprocess.TimeoutExpired:
+        print(f"Ping to {ip} timed out after {timeout}s")
+        return False
+    except FileNotFoundError:
+        print("Error: ping command not found")
+        return False
     except Exception as e:
         print(f"Ping to {ip} failed: {e}")
         return False
