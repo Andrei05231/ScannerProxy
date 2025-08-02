@@ -41,14 +41,15 @@ class AgentDiscoveryService:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         sock.settimeout(1.0)
-        sock.bind((self.local_ip, self.port))
+        sock.bind((self.local_ip, 0))  # Use random port (port 0 = let OS choose)
+        actual_port = sock.getsockname()[1]  # Get the actual port assigned by OS
 
         try:
             # Build and send discovery message
             discovery_message = self._build_discovery_message(src_name)
             udp_packet_bytes = discovery_message.to_bytes()
             
-            print(f"Sending discovery packet ({len(udp_packet_bytes)} bytes) to {self.broadcast_ip}:{self.port}...")
+            print(f"Sending discovery packet ({len(udp_packet_bytes)} bytes) from {self.local_ip}:{actual_port} to {self.broadcast_ip}:{self.port}...")
             sock.sendto(udp_packet_bytes, (self.broadcast_ip, self.port))
             
             # Listen for responses

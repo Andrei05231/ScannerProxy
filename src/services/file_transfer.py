@@ -63,14 +63,15 @@ class FileTransferService:
         sock.settimeout(config.get('network.socket_timeout', 1.0))
         
         try:
-            # Bind to local IP and port 706 for consistency
-            sock.bind((self.local_ip, self.port))
+            # Bind to local IP with random port (port 0 = let OS choose)
+            sock.bind((self.local_ip, 0))
+            actual_port = sock.getsockname()[1]  # Get the actual port assigned by OS
             
             # Build and send file transfer request
             request_message = self._build_file_transfer_message(src_name, dst_name)
             request_bytes = request_message.to_bytes()
             
-            self.logger.info(f"Sending file transfer request ({len(request_bytes)} bytes) from {self.local_ip}:{self.port} to {target_ip}:{self.port}")
+            self.logger.info(f"Sending file transfer request ({len(request_bytes)} bytes) from {self.local_ip}:{actual_port} to {target_ip}:{self.port}")
             self.logger.debug(f"Message type: {request_message.type_of_request.hex()} (should be 5a5400)")
             
             sock.sendto(request_bytes, (target_ip, self.port))
