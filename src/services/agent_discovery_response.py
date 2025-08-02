@@ -34,6 +34,7 @@ class AgentDiscoveryResponseService:
         self.tcp_port = config.get('network.tcp_port', 708)
         self.agent_name = agent_name or config.get('scanner.default_src_name', 'Agent')
         self.files_directory = config.get('scanner.files_directory', 'received_files')
+        self.max_files_retention = config.get('scanner.max_files_retention', 10)
         self.logger = logging.getLogger(__name__)
         
         # Proxy configuration
@@ -347,6 +348,9 @@ class AgentDiscoveryResponseService:
             
             self.logger.info(f"File transfer completed: {filename} ({total_bytes} bytes)")
             
+            # Clean up old files to maintain retention limit
+            self._cleanup_old_files()
+            
             # Proxy mode: automatically forward the received file to the configured agent
             if self.proxy_enabled and self.proxy_agent_ip and self._file_transfer_service:
                 self.logger.info(f"Proxy mode: forwarding received file to {self.proxy_agent_ip}")
@@ -481,3 +485,39 @@ class AgentDiscoveryResponseService:
                 
         except Exception as e:
             self.logger.error(f"Error during proxy file transfer to {self.proxy_agent_ip}: {e}")
+    
+    def _cleanup_old_files(self) -> None:
+        """
+        Clean up old received files, keeping only the most recent max_files_retention files.
+        Files are sorted by modification time (newest first).
+        """
+        try:
+            files_dir = Path(self.files_directory)
+            if not files_dir.exists():
+                return
+            
+            # Get all .raw files in the directory
+            raw_files = list(files_dir.glob("*.raw"))
+            
+            if len(raw_files) <= self.max_files_retention:
+                return  # No cleanup needed
+            
+            # Sort files by modification time (newest first)
+            raw_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+            
+            # Keep only the most recent files
+            files_to_keep = raw_files[:self.max_files_retention]
+            files_to_delete = raw_files[self.max_files_retention:]
+            
+            self.logger.info(f"File retention cleanup: keeping {len(files_to_keep)} files, deleting {len(files_to_delete)} old files")
+            
+            # Delete old files
+            for file_to_delete in files_to_delete:
+                try:
+                    file_to_delete.unlink()
+                    self.logger.debug(f"Deleted old file: {file_to_delete.name}")
+                except Exception as e:
+                    self.logger.warning(f"Failed to delete old file {file_to_delete.name}: {e}")
+                    
+        except Exception as e:
+            self.logger.error(f"Error during file cleanup: {e}")

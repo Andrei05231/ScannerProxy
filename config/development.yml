@@ -14,6 +14,7 @@ scanner:
   max_retry_attempts: 3
   default_file_path: "files/scan.raw"
   files_directory: "files"
+  max_files_retention: 10  # Maximum number of received files to keep
 
 # File Transfer Protocol Messages
 file_transfer:
