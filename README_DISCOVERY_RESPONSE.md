@@ -20,9 +20,10 @@ python -m agent_discovery_app
 
 ## Features
 
-- **Interactive CLI**: Rich console interface with menu-driven operation
-- **Real-time Discovery Events**: Shows live discovery requests as they arrive
-- **Service Management**: Start/stop the discovery response service
+- **Headless Service**: Runs as a background service without user interaction
+- **Discovery Response**: Automatically responds to scanner discovery broadcasts
+- **File Transfer Reception**: Listens for file transfer requests and receives files via TCP
+- **Real-time Logging**: Shows live discovery requests and file transfers in logs
 - **Network Configuration**: Automatic network interface detection
 - **Graceful Shutdown**: Proper cleanup on exit or signal interruption
 
@@ -31,20 +32,20 @@ python -m agent_discovery_app
 1. **Start the discovery response service:**
    ```bash
    python agent_discovery_app.py
-   # Select "Start Discovery Response Service"
    ```
 
 2. **In another terminal, run the mock scanner:**
    ```bash
    python -m tests.mocks.mock_scanner
    # Select "Discover Agents" option
+   # Then select "Send File Transfer Request"
    ```
 
 3. **Observe the interaction:**
-   - Mock scanner sends discovery broadcast
-   - Discovery response service receives the broadcast
-   - Response service automatically sends back a discovery response
-   - Mock scanner receives and displays the response
+   - Mock scanner sends discovery broadcast → Service responds
+   - Mock scanner sends file transfer request (UDP) → Service acknowledges
+   - Mock scanner opens TCP connection → Service receives file data
+   - Service saves received file locally
 
 ## Configuration
 
@@ -55,8 +56,23 @@ The service uses the same configuration system as the main application:
 - **Environment variable**: `SCANNER_ENV` (defaults to "development")
 
 Key configuration values:
-- `network.udp_port`: Port to listen on (default: 706)
+- `network.udp_port`: Port to listen on for discovery/file transfer requests
+- `network.tcp_port`: Port to listen on for file data transfer
 - `scanner.default_src_name`: Agent name to include in responses
+- `scanner.files_directory`: Directory to save received files
+
+## Protocol Support
+
+The service supports two types of scanner protocol messages:
+
+1. **Discovery Request** (`0x5A 0x00 0x00`):
+   - Responds with agent information
+   - Uses configured agent name as destination
+
+2. **File Transfer Request** (`0x5A 0x54 0x00`):
+   - Acknowledges the request via UDP
+   - Starts TCP listener on configured port
+   - Receives and saves file data locally
 
 ## Architecture
 
@@ -64,11 +80,13 @@ The service follows the same SOLID principles as the main application:
 
 ```
 AgentDiscoveryResponseService
-├── Listens on UDP port 706 (configurable)
-├── Parses incoming ScannerProtocolMessage
-├── Validates discovery request type (0x5A 0x00 0x00)
-├── Builds discovery response message
-└── Sends response back to original sender
+├── UDP Listener (port 706)
+│   ├── Discovery Requests → Send Response
+│   └── File Transfer Requests → Start TCP Listener
+└── TCP File Receiver (port 708)
+    ├── Accept connections
+    ├── Receive file data
+    └── Save to local directory
 ```
 
 ## Code Reuse
