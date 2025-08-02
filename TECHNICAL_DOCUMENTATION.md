@@ -2,7 +2,22 @@
 
 ## Project Overview
 
-ScannerProxy is a Python-based application that facilitates network-based scanner communication and document transfer operations. The system implements a modular architecture following SOLID design principles and provides both scanner discovery and file transfer capabilities over UDP/TCP protocols.
+ScannerProxy is a Python-based network service that facilitates secure scanner discovery and file transfer operations over UDP/TCP protocols. The system implements a modular, SOLID-principled architecture supporting both standalone mode (local file storage) and proxy mode (file forwarding to target agents). Built with modern Python practices, it provides comprehensive deployment options including local development, Docker containerization, and systemd service integration.
+
+### Key Features
+- **Dual-Mode Operation**: Standalone file storage or proxy forwarding
+- **Protocol Implementation**: Custom UDP/TCP scanner communication protocol
+- **Rich Testing Tools**: Interactive CLI with progress tracking and network visualization
+- **Production Ready**: Docker containers, systemd services, health monitoring
+- **Comprehensive Logging**: Structured logging with rotation and filtering
+- **Network Discovery**: Automatic interface detection and agent discovery
+- **File Management**: Automatic retention policies and cleanup
+
+### Target Use Cases
+- Scanner network integration and file routing
+- Legacy scanner modernization with proxy capabilities  
+- Network testing and protocol development
+- Document workflow automation and processing
 
 ## Table of Contents
 
@@ -17,7 +32,11 @@ ScannerProxy is a Python-based application that facilitates network-based scanne
 9. [Usage Examples](#usage-examples)
 10. [Testing](#testing)
 11. [Deployment](#deployment)
-12. [Troubleshooting](#troubleshooting)
+12. [Proxy Mode](#proxy-mode)
+13. [Troubleshooting](#troubleshooting)
+14. [Maintenance](#maintenance)
+15. [Security Considerations](#security-considerations)
+16. [Extension Points](#extension-points)
 
 ## Architecture Overview
 
@@ -63,32 +82,80 @@ The ScannerProxy follows SOLID design principles:
 
 ### Runtime Requirements
 
-- **Python**: 3.8+ (tested with Python 3.12)
-- **Operating System**: Linux (Ubuntu/Debian recommended)
+- **Python**: 3.12+ (recommended) or 3.8+ minimum
+- **Operating System**: Linux (Ubuntu/Debian preferred), systemd for services
 - **Network**: IPv4 network interface with broadcast capability
-- **Memory**: Minimum 128MB RAM
-- **Storage**: 100MB free space for application and logs
+- **Ports**: UDP 706 and TCP 708 must be available
+- **Memory**: 128MB RAM minimum, 256MB recommended for containers
+- **Storage**: 500MB free space for application, logs, and received files
+
+### Development Requirements
+
+Additional requirements for development/testing:
+
+- **Docker**: Latest version with docker-compose
+- **Make**: GNU Make for automation
+- **Git**: Version control and repository management
+- **Network Tools**: tcpdump, netstat for debugging (optional)
 
 ### Python Dependencies
 
+Current dependencies (from requirements.txt):
+
 ```
-numpy>=1.20.0
-Pillow>=8.0.0
-scapy>=2.4.0
-pydantic>=1.8.0
-netifaces>=0.11.0
-PyYAML>=5.4.0
-rich>=10.0.0
-click>=8.0.0
-inquirer>=2.7.0
-humanize>=3.0.0
+numpy          # Mathematical operations and data processing
+Pillow         # Image processing capabilities  
+scapy          # Network packet manipulation (if needed)
+pydantic       # Data validation and settings management
+netifaces      # Network interface detection
+PyYAML         # Configuration file parsing
+rich           # Rich CLI interface and progress bars
+click          # Command-line interface framework
+inquirer       # Interactive command-line prompts
+humanize       # Human-readable data formatting
 ```
+
+### Port Requirements
+
+| Port | Protocol | Purpose | Direction |
+|------|----------|---------|-----------|
+| 706  | UDP      | Discovery requests, file transfer control | Inbound |
+| 708  | TCP      | File data transfer | Inbound |
+
+### Network Configuration
+
+The service requires:
+- **Broadcast capability** on the network interface
+- **Static IP assignment** recommended for production
+- **Firewall rules** allowing inbound UDP 706 and TCP 708
+- **DNS resolution** for hostname-based agent addressing (optional)
 
 ## Installation & Setup
 
-### Option 1: Standard Installation
+### Automated Setup (Recommended)
+
+The project includes comprehensive automation through the Makefile:
 
 1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd ScannerProxy
+   ```
+
+2. **Quick setup:**
+   ```bash
+   make setup          # Create venv, install dependencies, check requirements
+   make check          # Verify system requirements and configuration
+   ```
+
+3. **Development setup:**
+   ```bash
+   make dev-setup      # Complete development environment with confirmation
+   ```
+
+### Manual Installation
+
+1. **Clone and enter directory:**
    ```bash
    git clone <repository-url>
    cd ScannerProxy
@@ -105,19 +172,20 @@ humanize>=3.0.0
    pip install -r requirements.txt
    ```
 
-4. **Set environment variables (optional):**
+4. **Configure environment:**
    ```bash
-   export SCANNER_ENV=development  # or production
+   export SCANNER_CONFIG_ENV=development  # or production
    ```
 
-### Option 2: Development Setup
+### Quick Verification
 
-1. **Follow steps 1-3 from Standard Installation**
+Test the installation:
 
-2. **Install development dependencies:**
-   ```bash
-   pip install -r requirements-dev.txt  # if exists
-   ```
+```bash
+make test           # Run basic functionality tests
+make lint           # Check code syntax
+make mock-scanner   # Interactive testing tool
+```
 
 3. **Set up pre-commit hooks:**
    ```bash
@@ -284,52 +352,87 @@ Offset | Size | Field                | Description
 
 ```
 ScannerProxy/
-├── requirements.txt                 # Python dependencies
-├── config/                         # Configuration files
-│   ├── development.yml
-│   └── production.yml
-├── docs/                          # Documentation
-├── files/                         # Sample files for transfer
-│   ├── scan.raw
-│   └── other_scan.raw
-├── logs/                          # Application logs
-├── src/                           # Source code
+├── README.md                        # Quick start guide and overview
+├── TECHNICAL_DOCUMENTATION.md      # Comprehensive technical documentation
+├── README_DISCOVERY_RESPONSE.md    # Agent discovery service details
+├── Makefile                        # Automated build and deployment commands
+├── requirements.txt                # Python dependencies
+├── Dockerfile                      # Container image definition
+├── docker-compose.yml              # Production container orchestration
+├── agent_discovery_app.py          # Main service application entry point
+│
+├── config/                         # Environment-specific configurations
+│   ├── development.yml             # Local development settings
+│   ├── production.yml              # Production/container settings
+│   └── proxy_test.yml              # Testing configuration
+│
+├── src/                            # Core application source code
 │   ├── __init__.py
-│   ├── __main__.py               # Application entry point
-│   ├── main.py                   # Main application logic
-│   ├── connect_to_scanner.py     # Scanner connection utilities
-│   ├── convert_raw_data.py       # Raw data conversion
-│   ├── receiver_proxy.py         # Receiver proxy functionality
-│   ├── scanner_proxy.py          # Scanner proxy functionality
-│   ├── agents/                   # Agent base classes
+│   ├── __main__.py                 # Module entry point for python -m src
+│   ├── agents/                     # Agent base classes and interfaces
 │   │   ├── __init__.py
 │   │   └── base.py
-│   ├── core/                     # Core business logic
+│   ├── core/                       # Core business logic and orchestration
 │   │   ├── __init__.py
-│   │   └── scanner_service.py
-│   ├── dto/                      # Data transfer objects
+│   │   └── scanner_service.py      # Main scanner service orchestrator
+│   ├── dto/                        # Data transfer objects and models
 │   │   ├── __init__.py
-│   │   └── network_models.py
-│   ├── infrastructure/           # Infrastructure components
+│   │   └── network_models.py       # Protocol messages and validation
+│   ├── infrastructure/             # Infrastructure layer (future extensions)
 │   │   └── __init__.py
-│   ├── network/                  # Network layer
+│   ├── network/                    # Network layer and protocols
 │   │   ├── __init__.py
-│   │   ├── discovery.py
-│   │   ├── interfaces.py
-│   │   └── protocols/
+│   │   ├── discovery.py            # Agent discovery service
+│   │   ├── interfaces.py           # Network interface management
+│   │   └── protocols/              # Protocol implementations
 │   │       ├── __init__.py
-│   │       ├── message_builder.py
-│   │       └── scanner_protocol.py
-│   ├── server/                   # Server components
-│   ├── services/                 # Service layer
+│   │       ├── message_builder.py  # Protocol message construction
+│   │       └── scanner_protocol.py # Scanner protocol implementation
+│   ├── services/                   # Service layer implementations
 │   │   ├── __init__.py
-│   │   └── file_transfer.py
-│   └── utils/                    # Utility modules
+│   │   ├── agent_discovery_response.py  # Discovery response service
+│   │   └── file_transfer.py        # File transfer service
+│   └── utils/                      # Utility modules and helpers
 │       ├── __init__.py
-│       ├── config.py
-│       └── logging_setup.py
-└── tests/                        # Test suite
-    ├── mocks/
+│       ├── config.py               # Configuration management
+│       └── logging_setup.py        # Logging configuration
+│
+├── tests/                          # Test suite and testing utilities
+│   └── mocks/
+│       └── mock_scanner.py         # Interactive scanner testing tool
+│
+├── scripts/                        # Automation and deployment scripts
+│   ├── check.sh                    # System requirements check
+│   ├── clean.sh                    # Environment cleanup
+│   ├── emergency-stop.sh           # Emergency process termination
+│   ├── install-service.sh          # System service installation
+│   ├── logs.sh                     # Log viewing utilities
+│   ├── remove-service.sh           # Service removal
+│   ├── setup.sh                    # Environment setup
+│   ├── status.sh                   # Service status checking
+│   └── test.sh                     # Test execution
+│
+├── logs/                           # Application logs and monitoring
+│   ├── scanner-dev.log             # Development environment logs
+│   └── scanner-prod.log            # Production environment logs
+│
+└── files/                          # File storage and transfer
+    ├── *.raw                       # Received raw scanner files
+    └── *.jpg                       # Processed image files (if applicable)
+```
+
+### Key Components Description
+
+| Component | Purpose | Location |
+|-----------|---------|----------|
+| **AgentDiscoveryResponseService** | Handles discovery broadcasts and file transfer requests | `src/services/agent_discovery_response.py` |
+| **ScannerService** | Core orchestration and network operations | `src/core/scanner_service.py` |
+| **FileTransferService** | File upload/download over TCP | `src/services/file_transfer.py` |
+| **NetworkInterfaceManager** | Network interface detection | `src/network/interfaces.py` |
+| **ScannerProtocolMessage** | Protocol message parsing | `src/dto/network_models.py` |
+| **Mock Scanner** | Interactive testing tool | `tests/mocks/mock_scanner.py` |
+| **Configuration System** | YAML-based configuration | `src/utils/config.py` |
+| **Logging System** | Structured logging with rotation | `src/utils/logging_setup.py` |
     │   └── mock_scanner.py
     └── unit/
 ```
@@ -514,38 +617,93 @@ For testing, you can set up a local network environment:
 
 ## Deployment
 
-### Development Deployment
+### Automated Deployment (Recommended)
+
+The Makefile provides comprehensive deployment automation:
+
+#### Development Deployment
+```bash
+make setup          # Set up environment
+make service        # Run local service for testing
+make mock-scanner   # Interactive testing tool
+```
+
+#### Production Deployment
+```bash
+make prod-deploy    # Complete production setup (Docker + systemd)
+make status         # Verify deployment health
+make logs           # Monitor service logs
+```
+
+#### Container Deployment
+```bash
+make docker-build   # Build production image
+make docker-run     # Start with ipvlan networking
+make docker-logs    # Monitor container logs
+```
+
+### Manual Development Deployment
 
 1. **Set environment:**
    ```bash
-   export SCANNER_ENV=development
+   export SCANNER_CONFIG_ENV=development
    ```
 
-2. **Run application:**
+2. **Run agent discovery service:**
+   ```bash
+   python agent_discovery_app.py
+   ```
+
+3. **Alternative module execution:**
    ```bash
    python -m src
    ```
 
-### Production Deployment
+### Manual Production Deployment
+
+#### Option 1: Systemd Service (Automated)
+```bash
+make install-service    # Uses scripts/install-service.sh
+make status            # Check service health
+make restart-service   # Restart if needed
+```
+
+#### Option 2: Manual Systemd Service
 
 1. **Set environment:**
    ```bash
-   export SCANNER_ENV=production
+   export SCANNER_CONFIG_ENV=production
    ```
 
-2. **Create systemd service (optional):**
+2. **Create systemd service file:**
    ```ini
    [Unit]
-   Description=Scanner Proxy Service
+   Description=Scanner Proxy Agent Discovery Service
    After=network.target
+   Wants=network-online.target
 
    [Service]
    Type=simple
    User=scanner
+   Group=scanner
    WorkingDirectory=/opt/scannerproxy
-   Environment=SCANNER_ENV=production
-   ExecStart=/opt/scannerproxy/venv/bin/python -m src
+   Environment=SCANNER_CONFIG_ENV=production
+   Environment=PYTHONPATH=/opt/scannerproxy/src
+   ExecStart=/opt/scannerproxy/venv/bin/python agent_discovery_app.py
    Restart=always
+   RestartSec=10
+   KillMode=process
+
+   # Logging
+   StandardOutput=journal
+   StandardError=journal
+   SyslogIdentifier=scanner-proxy
+
+   # Security
+   NoNewPrivileges=true
+   PrivateTmp=true
+   ProtectSystem=strict
+   ReadWritePaths=/opt/scannerproxy/logs /opt/scannerproxy/files
 
    [Install]
    WantedBy=multi-user.target
@@ -553,18 +711,96 @@ For testing, you can set up a local network environment:
 
 3. **Enable and start service:**
    ```bash
-   sudo systemctl enable scannerproxy
-   sudo systemctl start scannerproxy
+   sudo systemctl enable scanner-proxy
+   sudo systemctl start scanner-proxy
+   sudo systemctl status scanner-proxy
    ```
 
 ### Docker Deployment
 
-1. **Create Dockerfile:**
+#### Option 1: Docker Compose (Recommended)
+```bash
+make docker-build   # Build image
+make docker-run     # Start with docker-compose
+```
+
+This uses the included `docker-compose.yml` with:
+- **ipvlan networking** for direct network access
+- **Static IP assignment** (192.168.1.201)
+- **Volume mounts** for logs and files
+- **Health checks** and automatic restart
+- **Resource limits** for production stability
+
+#### Option 2: Manual Docker Deployment
+
+1. **Build image:**
    ```dockerfile
    FROM python:3.12-slim
 
    WORKDIR /app
    COPY requirements.txt .
+   RUN pip install --no-cache-dir -r requirements.txt
+
+   COPY src/ src/
+   COPY config/ config/
+   COPY agent_discovery_app.py .
+   
+   RUN mkdir -p logs files
+   ENV SCANNER_CONFIG_ENV=production
+   
+   EXPOSE 706/udp 708/tcp
+   
+   HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+     CMD pgrep -f "python agent_discovery_app.py" > /dev/null || exit 1
+   
+   CMD ["python", "agent_discovery_app.py"]
+   ```
+
+2. **Build and run:**
+   ```bash
+   docker build -t scanner-proxy:latest .
+   docker run -d \
+     --name scanner-proxy-prod \
+     --network host \
+     -v $(pwd)/logs:/app/logs \
+     -v $(pwd)/files:/app/files \
+     -v $(pwd)/config:/app/config:ro \
+     --restart unless-stopped \
+     scanner-proxy:latest
+   ```
+
+### Health Monitoring
+
+Monitor deployment health:
+
+```bash
+# Service status
+make status
+
+# Real-time logs
+make logs
+make docker-logs
+
+# Manual checks
+sudo systemctl status scanner-proxy
+docker ps | grep scanner-proxy
+```
+
+### Configuration Management
+
+Update configuration without rebuild:
+
+```bash
+# Edit configuration
+vim config/production.yml
+
+# Restart service
+make restart-service
+
+# Or restart container
+make docker-stop
+make docker-run
+```
    RUN pip install -r requirements.txt
 
    COPY src/ src/
@@ -580,6 +816,99 @@ For testing, you can set up a local network environment:
    docker build -t scannerproxy .
    docker run -d --name scannerproxy --network host scannerproxy
    ```
+
+## Proxy Mode
+
+### Overview
+
+ScannerProxy supports a powerful proxy mode that automatically forwards received files to other network agents. This enables creating a network of interconnected scanner agents for distributed file processing workflows.
+
+### Configuration
+
+Enable proxy mode in the configuration file:
+
+```yaml
+# config/production.yml or config/development.yml
+proxy:
+  enabled: true                    # Enable proxy mode
+  agent_ip_address: "192.168.1.138"  # Target agent IP for forwarding
+
+scanner:
+  default_src_name: "Scanner-Proxy"  # Identifier for this proxy agent
+  files_directory: "files"           # Local storage for received files
+```
+
+### How Proxy Mode Works
+
+1. **Scanner connects to proxy agent** (this service)
+2. **Proxy receives file** via TCP and stores locally  
+3. **Proxy automatically forwards** the file to the configured target agent
+4. **Target agent processes** the file normally
+5. **Local copy is retained** according to retention policy
+
+### Proxy Flow Diagram
+
+```
+Scanner          Proxy Agent         Target Agent
+   |    UDP/TCP      |    UDP/TCP         |
+   |---------------->|---------------->   |
+   |   File Transfer |   File Forward     |
+   |                 |                    |
+   |    [Local Storage + Forward]         |
+```
+
+### Use Cases
+
+- **Legacy Integration**: Connect old scanners to modern processing systems
+- **Load Balancing**: Distribute files across multiple processing agents  
+- **Network Bridging**: Route files between different network segments
+- **Backup & Redundancy**: Maintain local copies while forwarding for processing
+- **Protocol Translation**: Convert between different scanner protocols
+
+### Proxy Agent Configuration Example
+
+```yaml
+# Proxy agent that receives from scanners and forwards to processing server
+network:
+  udp_port: 706
+  tcp_port: 708
+
+scanner:
+  default_src_name: "Network-Proxy-01"
+  files_directory: "files"
+  max_files_retention: 50
+
+proxy:
+  enabled: true
+  agent_ip_address: "192.168.1.200"  # Processing server
+
+logging:
+  level: "INFO"
+  file_path: "logs/proxy-agent.log"
+```
+
+### Monitoring Proxy Operations
+
+Monitor proxy forwarding through logs:
+
+```bash
+# View proxy forwarding activity
+grep "Proxy mode:" logs/scanner-prod.log
+
+# Monitor successful forwards
+grep "Proxy file transfer completed" logs/scanner-prod.log
+
+# Check for forwarding errors
+grep "Proxy file transfer failed" logs/scanner-prod.log
+```
+
+### Advanced Proxy Features
+
+- **Automatic Retry**: Failed forwards are logged but don't prevent local storage
+- **File Retention**: Local files follow standard retention policies
+- **Error Handling**: Network failures don't interrupt scanner operations
+- **Progress Tracking**: Detailed logging of forward operations
+- **Configuration Reload**: Proxy settings can be updated without restart
 
 ## Troubleshooting
 
