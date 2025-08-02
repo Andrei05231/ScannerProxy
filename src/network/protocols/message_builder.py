@@ -65,6 +65,11 @@ class ScannerProtocolMessageBuilder:
         self._reserved1 = b'\x00' * ProtocolConstants.RESERVED1_SIZE
         return self
     
+    def with_reserved1(self, reserved1: bytes) -> "ScannerProtocolMessageBuilder":
+        """Set reserved1 to specific value"""
+        self._reserved1 = reserved1
+        return self
+    
     def with_initiator_ip(self, ip: str | IPv4Address) -> "ScannerProtocolMessageBuilder":
         """Set initiator IP address"""
         if isinstance(ip, str):
@@ -77,6 +82,11 @@ class ScannerProtocolMessageBuilder:
         """Set reserved2 to all zeros"""
         ProtocolConstants = get_protocol_constants()
         self._reserved2 = b'\x00' * ProtocolConstants.RESERVED2_SIZE
+        return self
+    
+    def with_reserved2(self, reserved2: bytes) -> "ScannerProtocolMessageBuilder":
+        """Set reserved2 to specific value"""
+        self._reserved2 = reserved2
         return self
     
     def with_src_name(self, name: str | bytes) -> "ScannerProtocolMessageBuilder":

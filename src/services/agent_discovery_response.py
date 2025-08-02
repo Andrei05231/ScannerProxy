@@ -376,9 +376,9 @@ class AgentDiscoveryResponseService:
         # Build response with sender's name as src and our agent name as dst
         return (builder.reset()
                 .with_discovery_request()
-                .with_all_reserved1_zeros()
+                .with_reserved1(bytes.fromhex('0009b9002c84'))  # Set specific reserved1 value
                 .with_initiator_ip(self.local_ip)
-                .with_all_reserved2_zeros()
+                .with_reserved2(bytes.fromhex('000002c4'))      # Set specific reserved2 value
                 .with_src_name(sender_name)
                 .with_dst_name(self.agent_name)
                 .build())
@@ -403,9 +403,9 @@ class AgentDiscoveryResponseService:
         # This acknowledges the file transfer request and indicates we're ready to receive
         return (builder.reset()
                 .with_file_transfer_request()  # Use file transfer signature 0x5A5400
-                .with_all_reserved1_zeros()
+                .with_reserved1(bytes.fromhex('0009b9002c84'))  # Set specific reserved1 value
                 .with_initiator_ip(self.local_ip)
-                .with_all_reserved2_zeros()
+                .with_reserved2(bytes.fromhex('000002c4'))      # Set specific reserved2 value
                 .with_src_name(sender_name)
                 .with_dst_name(self.agent_name)
                 .build())
