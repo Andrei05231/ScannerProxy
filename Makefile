@@ -25,7 +25,7 @@ help:
 	@echo "$(YELLOW)Development & Testing:$(NC)"
 	@echo "  make setup          - Set up local Python environment"
 	@echo "  make mock-scanner   - Run the mock scanner for testing"
-	@echo "  make service        - Run the agent discovery service locally"
+	@echo "  make service        - Run the agent service locally (standalone/proxy mode)"
 	@echo "  make clean          - Clean up local environment"
 	@echo ""
 	@echo "$(YELLOW)Docker Operations:$(NC)"
@@ -69,16 +69,17 @@ clean:
 mock-scanner: setup
 	@echo "$(BLUE)Starting Mock Scanner...$(NC)"
 	@echo "$(YELLOW)Press Ctrl+C to stop$(NC)"
-	@cd . && $(VENV_DIR)/bin/python tests/mocks/mock_scanner.py
+	@cd . && $(VENV_DIR)/bin/python -m tests.mocks.mock_scanner
 
 service: setup
-	@echo "$(BLUE)Starting Agent Discovery Service...$(NC)"
+	@echo "$(BLUE)Starting Agent Service...$(NC)"
+	@echo "$(YELLOW)Mode: Standalone (stores files) or Proxy (forwards files)$(NC)"
 	@echo "$(YELLOW)Press Ctrl+C to stop$(NC)"
-	@cd . && $(VENV_DIR)/bin/python agent_discovery_app.py
+	@cd . && $(VENV_DIR)/bin/python -m agent_discovery_app
 
 test: setup
 	@echo "$(BLUE)Running tests...$(NC)"
-	@$(VENV_DIR)/bin/python -c "import src.services.agent_discovery_response; print('✓ Agent discovery response service imports successfully')"
+	@$(VENV_DIR)/bin/python -c "import src.services.agent_discovery_response; print('✓ Agent service imports successfully')"
 	@$(VENV_DIR)/bin/python -c "import src.services.file_transfer; print('✓ File transfer service imports successfully')"
 	@$(VENV_DIR)/bin/python -c "import src.network.discovery; print('✓ Discovery service imports successfully')"
 	@echo "$(GREEN)✓ All tests passed!$(NC)"
@@ -120,7 +121,7 @@ install-service: docker-build
 		echo "$(YELLOW)Creating systemd service file...$(NC)"; \
 		sudo tee /etc/systemd/system/$(SYSTEMD_SERVICE) > /dev/null << 'EOF'; \
 [Unit]; \
-Description=Scanner Proxy Service; \
+Description=Scanner Proxy Agent Service; \
 Requires=docker.service; \
 After=docker.service; \
 ; \
@@ -140,7 +141,7 @@ EOF \
 	@sudo systemctl daemon-reload
 	@sudo systemctl enable $(SYSTEMD_SERVICE)
 	@sudo systemctl start $(SYSTEMD_SERVICE)
-	@echo "$(GREEN)✓ Scanner Proxy service installed and started!$(NC)"
+	@echo "$(GREEN)✓ Scanner Proxy Agent Service installed and started!$(NC)"
 	@echo "$(BLUE)Service will now start automatically at boot$(NC)"
 	@echo "$(YELLOW)Use 'make status' to check service status$(NC)"
 
@@ -168,12 +169,12 @@ dev-setup: setup
 	@echo "$(BLUE)Development environment ready!$(NC)"
 	@echo "$(YELLOW)Available commands:$(NC)"
 	@echo "  make mock-scanner  - Test with mock scanner"
-	@echo "  make service       - Run service locally"
+	@echo "  make service       - Run agent service locally"
 	@echo "  make test          - Run tests"
 
 prod-deploy: docker-build install-service
 	@echo "$(GREEN)✓ Production deployment complete!$(NC)"
-	@echo "$(BLUE)Scanner Proxy is now running as a system service$(NC)"
+	@echo "$(BLUE)Scanner Proxy Agent Service is now running as a system service$(NC)"
 
 # Quick status check
 check:
