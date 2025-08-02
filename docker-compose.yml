@@ -37,7 +37,7 @@ services:
     
     # Health check
     healthcheck:
-      test: ["CMD", "python", "-c", "import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(('0.0.0.0', 706)); s.close()"]
+      test: ["CMD", "sh", "-c", "pgrep -f 'python agent_discovery_app.py' > /dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
