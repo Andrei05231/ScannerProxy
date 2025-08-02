@@ -185,17 +185,17 @@ class AgentDiscoveryResponseService:
         """
         builder = ScannerProtocolMessageBuilder()
         
-        # Use computer hostname as destination name
-        computer_name = socket.gethostname()
+        # Use sender's name from the original request as source name
+        sender_name = original_message.src_name.decode('ascii', errors='ignore')
         
-        # Build response with our agent name and destination as computer hostname
+        # Build response with sender's name as src and our agent name as dst
         return (builder.reset()
                 .with_discovery_request()
                 .with_all_reserved1_zeros()
                 .with_initiator_ip(self.local_ip)
                 .with_all_reserved2_zeros()
-                .with_src_name(self.agent_name)
-                .with_dst_name(computer_name)
+                .with_src_name(sender_name)
+                .with_dst_name(self.agent_name)
                 .build())
     
     def _send_response(self, response_message: ScannerProtocolMessage, addr: tuple) -> None:

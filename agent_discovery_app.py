@@ -93,8 +93,14 @@ def main():
         local_ip, broadcast_ip, interface_name = network_manager.get_default_interface_info()
         
         # Get configuration
-        udp_port = config.get('network.udp_port', 706)
-        agent_name = config.get('scanner.default_src_name', 'ResponseAgent')
+        udp_port = config.get('network.udp_port')
+        agent_name = config.get('scanner.default_src_name')
+        
+        # Validate required configuration
+        if udp_port is None:
+            raise ValueError("UDP port not configured in config file (network.udp_port)")
+        if agent_name is None:
+            raise ValueError("Agent name not configured in config file (scanner.default_src_name)")
         
         logger.info(f"Network configuration - IP: {local_ip}, Interface: {interface_name}, Port: {udp_port}")
         logger.info(f"Agent name: {agent_name}")
