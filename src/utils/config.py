@@ -13,7 +13,8 @@ class ConfigurationManager:
     
     def __init__(self, config_dir: str = "config"):
         self.config_dir = Path(config_dir)
-        self.environment = os.getenv("SCANNER_ENV", "development")
+        # Check both SCANNER_ENV and SCANNER_CONFIG_ENV for environment setting
+        self.environment = os.getenv("SCANNER_CONFIG_ENV") or os.getenv("SCANNER_ENV", "development")
         self._config_cache: Optional[Dict[str, Any]] = None
     
     def load_config(self) -> Dict[str, Any]:
