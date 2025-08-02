@@ -95,6 +95,8 @@ def main():
         # Get configuration
         udp_port = config.get('network.udp_port')
         agent_name = config.get('scanner.default_src_name')
+        proxy_enabled = config.get('proxy.enabled', False)
+        proxy_agent_ip = config.get('proxy.agent_ip_address', '')
         
         # Validate required configuration
         if udp_port is None:
@@ -102,8 +104,18 @@ def main():
         if agent_name is None:
             raise ValueError("Agent name not configured in config file (scanner.default_src_name)")
         
+        # Validate proxy configuration if enabled
+        if proxy_enabled and not proxy_agent_ip:
+            raise ValueError("Proxy mode enabled but agent_ip_address not configured (proxy.agent_ip_address)")
+        
         logger.info(f"Network configuration - IP: {local_ip}, Interface: {interface_name}, Port: {udp_port}")
         logger.info(f"Agent name: {agent_name}")
+        
+        # Log proxy configuration
+        if proxy_enabled:
+            logger.info(f"Proxy mode ENABLED - will forward received files to {proxy_agent_ip}")
+        else:
+            logger.info("Proxy mode DISABLED - files will be stored locally only")
         
         # Create and start discovery service
         logger.info("Creating discovery response service...")

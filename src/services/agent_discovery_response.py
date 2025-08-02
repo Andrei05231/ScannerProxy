@@ -14,6 +14,7 @@ from datetime import datetime
 from ..dto.network_models import ScannerProtocolMessage
 from ..network.protocols.message_builder import ScannerProtocolMessageBuilder
 from ..utils.config import config
+from .file_transfer import FileTransferService
 
 
 class AgentDiscoveryResponseService:
@@ -34,6 +35,16 @@ class AgentDiscoveryResponseService:
         self.agent_name = agent_name or config.get('scanner.default_src_name', 'Agent')
         self.files_directory = config.get('scanner.files_directory', 'received_files')
         self.logger = logging.getLogger(__name__)
+        
+        # Proxy configuration
+        self.proxy_enabled = config.get('proxy.enabled', False)
+        self.proxy_agent_ip = config.get('proxy.agent_ip_address', '')
+        
+        # Initialize file transfer service for proxy mode
+        self._file_transfer_service = None
+        if self.proxy_enabled and self.proxy_agent_ip:
+            self._file_transfer_service = FileTransferService(local_ip=local_ip, port=port, tcp_port=self.tcp_port)
+            self.logger.info(f"Proxy mode enabled - will forward files to {self.proxy_agent_ip}")
         
         # UDP socket for discovery/file transfer requests
         self._udp_socket: Optional[socket.socket] = None
@@ -336,6 +347,11 @@ class AgentDiscoveryResponseService:
             
             self.logger.info(f"File transfer completed: {filename} ({total_bytes} bytes)")
             
+            # Proxy mode: automatically forward the received file to the configured agent
+            if self.proxy_enabled and self.proxy_agent_ip and self._file_transfer_service:
+                self.logger.info(f"Proxy mode: forwarding received file to {self.proxy_agent_ip}")
+                self._forward_file_to_agent(filepath)
+            
         except Exception as e:
             self.logger.error(f"Error in file transfer from {client_addr}: {e}")
         finally:
@@ -427,3 +443,41 @@ class AgentDiscoveryResponseService:
             
         except Exception as e:
             self.logger.error(f"Failed to send UDP response to {addr}: {e}")
+    
+    def _forward_file_to_agent(self, file_path: Path) -> None:
+        """
+        Forward the received file to the configured proxy agent.
+        This method sends a UDP discovery request first, then transfers the file via TCP.
+        
+        Args:
+            file_path: Path to the file to forward
+        """
+        try:
+            self.logger.info(f"Starting proxy file transfer to {self.proxy_agent_ip}")
+            
+            # Define progress callback for logging
+            def progress_callback(bytes_sent: int, total_bytes: int) -> None:
+                if total_bytes > 0:
+                    progress = (bytes_sent / total_bytes) * 100
+                    self.logger.debug(f"Proxy transfer progress: {bytes_sent}/{total_bytes} bytes ({progress:.1f}%)")
+            
+            # Send file transfer request to the proxy agent
+            success, response = self._file_transfer_service.send_file_transfer_request(
+                target_ip=self.proxy_agent_ip,
+                src_name=self.agent_name,
+                dst_name="",  # Let the target agent determine this
+                file_path=str(file_path),
+                progress_callback=progress_callback
+            )
+            
+            if success and response:
+                self.logger.info(f"Proxy file transfer completed successfully to {self.proxy_agent_ip}")
+                response_src = response.src_name.decode('ascii', errors='ignore')
+                self.logger.debug(f"Received response from proxy agent: {response_src}")
+            elif success and not response:
+                self.logger.warning(f"Proxy file transfer sent but no response received from {self.proxy_agent_ip}")
+            else:
+                self.logger.error(f"Proxy file transfer failed to {self.proxy_agent_ip}")
+                
+        except Exception as e:
+            self.logger.error(f"Error during proxy file transfer to {self.proxy_agent_ip}: {e}")

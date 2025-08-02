@@ -36,3 +36,8 @@ logging:
 agents:
   discovery_interval: 60.0  # seconds
   max_agents: 50
+
+# Proxy configuration
+proxy:
+  enabled: false  # Set to true to enable proxy mode
+  agent_ip_address: ""  # IP address of the target agent to forward files to
