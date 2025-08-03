@@ -81,7 +81,7 @@ class RawFileConverter:
         quality_byte = header[1]
         format_byte1 = header[2]
         format_byte2 = header[3]
-        width = struct.unpack('<H', header[12:14])[0]  # Little-endian 16-bit
+        header_width = struct.unpack('<H', header[12:14])[0]  # This might be row data width, not pixel width
         
         # Interpret header values
         scan_type = self.scan_type_map.get(scan_type_byte, f'unknown_0x{scan_type_byte:02X}')
@@ -89,25 +89,32 @@ class RawFileConverter:
         format_type = self.format_map.get((format_byte1, format_byte2), 
                                         f'unknown_0x{format_byte1:02X}{format_byte2:02X}')
         
+        # Determine actual image dimensions based on scan type
+        if scan_type == 'color':
+            # For color images, header_width is the row data width (RGB bytes)
+            # Actual image width = header_width / 3
+            if header_width % 3 == 0:
+                width = header_width // 3  # Pixel width
+                bytes_per_pixel = 3  # RGB
+                row_data_width = header_width  # Byte width
+            else:
+                # Fallback if not divisible by 3
+                width = header_width
+                bytes_per_pixel = 1
+                row_data_width = header_width
+        else:
+            # For B&W and grayscale, header_width is the actual pixel width
+            width = header_width
+            bytes_per_pixel = 1
+            row_data_width = header_width
+            
         # Analyze file structure to find height
         file_size = file_path.stat().st_size
         header_size = 16  # Fixed header size
-        
-        # Determine bytes per pixel based on scan type
-        # Note: Based on analysis, all scan types appear to use 1 byte per pixel
-        # Color information might be encoded differently or use a palette
-        if scan_type == 'black_white':
-            bytes_per_pixel = 1  # 8-bit even for B&W
-        elif scan_type == 'grayscale':
-            bytes_per_pixel = 1  # 8-bit grayscale
-        elif scan_type == 'color':
-            bytes_per_pixel = 1  # 8-bit indexed color or compressed format
-        else:
-            bytes_per_pixel = 1  # Default fallback
             
         # Calculate expected row structure
         # Each row: pixel_data + EOL_marker(2 bytes) + padding(2 bytes)
-        expected_pixel_data_per_row = width * bytes_per_pixel
+        expected_pixel_data_per_row = row_data_width  # Use row_data_width instead of width * bytes_per_pixel
         expected_row_size = expected_pixel_data_per_row + 4  # +4 for EOL + padding
         
         # Calculate height based on file structure
@@ -122,7 +129,7 @@ class RawFileConverter:
             pixel_data_per_row = 0
             
         # Verify our calculation by checking actual EOL markers at expected positions
-        eol_marker = struct.pack('<H', width)  # Width as little-endian 16-bit
+        eol_marker = struct.pack('<H', header_width)  # Use header_width for EOL marker
         verified_height = 0
         
         if height > 0:
@@ -157,14 +164,16 @@ class RawFileConverter:
             'scan_type': scan_type,
             'quality': quality,
             'format_type': format_type,
-            'width': width,
+            'width': width,  # Actual image width in pixels
             'height': height,
+            'header_width': header_width,  # Width value from header (row data width for color)
+            'row_data_width': row_data_width,  # Actual row data width in bytes
             'file_size': file_size,
             'header_size': header_size,
             'row_size': row_size,
             'pixel_data_per_row': pixel_data_per_row,
             'bytes_per_pixel': bytes_per_pixel,
-            'estimated_bits_per_pixel': (pixel_data_per_row * 8 / width) if width > 0 else 0
+            'estimated_bits_per_pixel': (pixel_data_per_row * 8 / row_data_width) if row_data_width > 0 else 0
         }
         
         self.logger.info(f"Raw file analysis: {metadata}")
@@ -215,23 +224,31 @@ class RawFileConverter:
                     # Continue processing anyway, but log the issue
                 
                 # Convert pixel data based on scan type
-                if scan_type == 'color' and len(pixel_data) >= width:
-                    # For color images, we have 1 byte per pixel (indexed color or compressed)
-                    # We'll treat it as grayscale for now and let PIL handle any color mapping
-                    row_pixels = list(pixel_data[:width])
-                    image_data.append(row_pixels)
+                if scan_type == 'color' and len(pixel_data) >= width * 3:
+                    # For color images, we have RGB data (3 bytes per pixel)
+                    # Reshape to (width, 3) for RGB channels
+                    rgb_data = np.frombuffer(pixel_data[:width * 3], dtype=np.uint8)
+                    rgb_row = rgb_data.reshape((width, 3))
+                    image_data.append(rgb_row)
                 elif len(pixel_data) >= width:
                     # For B&W or grayscale (1 byte per pixel)
                     row_pixels = list(pixel_data[:width])
                     image_data.append(row_pixels)
                 else:
-                    self.logger.warning(f"Insufficient pixel data in row {row}: got {len(pixel_data)} bytes, expected at least {width}")
+                    expected_bytes = width * 3 if scan_type == 'color' else width
+                    self.logger.warning(f"Insufficient pixel data in row {row}: got {len(pixel_data)} bytes, expected at least {expected_bytes}")
                     break
             
             # Convert to numpy array
             if image_data:
-                image_array = np.array(image_data, dtype=np.uint8)
-                self.logger.info(f"Extracted image array shape: {image_array.shape} for {scan_type} image")
+                if scan_type == 'color':
+                    # For color images, stack the RGB rows
+                    image_array = np.array(image_data, dtype=np.uint8)
+                    self.logger.info(f"Extracted RGB image array shape: {image_array.shape} for {scan_type} image")
+                else:
+                    # For B&W and grayscale images
+                    image_array = np.array(image_data, dtype=np.uint8)
+                    self.logger.info(f"Extracted grayscale image array shape: {image_array.shape} for {scan_type} image")
             else:
                 raise ValueError("No valid image data extracted")
                 
@@ -266,10 +283,15 @@ class RawFileConverter:
         elif metadata['scan_type'] == 'grayscale':
             pil_image = Image.fromarray(image_array, mode='L')
         elif metadata['scan_type'] == 'color':
-            # For color images with 1 byte per pixel, treat as grayscale
-            # The scanner might be using indexed color or a custom color encoding
-            pil_image = Image.fromarray(image_array, mode='L')
-            self.logger.info("Color image converted as grayscale (1 byte per pixel format)")
+            # For color images, we now have proper RGB data
+            if len(image_array.shape) == 3 and image_array.shape[2] == 3:
+                # RGB image (height, width, 3)
+                pil_image = Image.fromarray(image_array, mode='RGB')
+                self.logger.info("Color image converted as RGB")
+            else:
+                # Fallback to grayscale if color processing failed
+                self.logger.warning("Color image processing failed, converting as grayscale")
+                pil_image = Image.fromarray(image_array, mode='L')
         else:
             pil_image = Image.fromarray(image_array, mode='L')
             
@@ -305,9 +327,15 @@ class RawFileConverter:
         elif metadata['scan_type'] == 'grayscale':
             pil_image = Image.fromarray(image_array, mode='L')
         elif metadata['scan_type'] == 'color':
-            # For color images with 1 byte per pixel, treat as grayscale
-            pil_image = Image.fromarray(image_array, mode='L')
-            self.logger.info("Color image converted as grayscale (1 byte per pixel format)")
+            # For color images, we now have proper RGB data
+            if len(image_array.shape) == 3 and image_array.shape[2] == 3:
+                # RGB image (height, width, 3)
+                pil_image = Image.fromarray(image_array, mode='RGB')
+                self.logger.info("Color image converted as RGB")
+            else:
+                # Fallback to grayscale if color processing failed
+                self.logger.warning("Color image processing failed, converting as grayscale")
+                pil_image = Image.fromarray(image_array, mode='L')
         else:
             pil_image = Image.fromarray(image_array, mode='L')
             
