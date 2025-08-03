@@ -9,12 +9,15 @@ ScannerProxy is a sophisticated Python-based network service that enables seamle
 ### Core Features
 - **Network Agent Discovery**: Automated scanner/agent discovery via UDP broadcasts
 - **Secure File Transfer**: Reliable TCP-based file transmission with progress tracking
-- **Dual Operation Modes**: Standalone storage or intelligent proxy forwarding
+- **Dual Operation Modes**: Agent mode (raw file conversion) or proxy mode (intelligent forwarding)
+- **Raw File Processing**: Automatic conversion of scanner raw files to standard formats (JPG, PNG, PDF)
 - **Rich Interactive Testing**: Full-featured CLI testing tools with progress visualization
 - **Production Ready**: Complete Docker containerization and systemd service integration
 
 ### Advanced Features  
-- **Automatic File Forwarding**: Proxy mode forwards received files to target agents
+- **Automatic File Conversion**: Agent mode converts raw scanner files to JPG/PNG/PDF formats
+- **Intelligent File Forwarding**: Proxy mode forwards received files to target agents
+- **Multi-Format Support**: Handles various scanner formats (B&W, grayscale, color, PDF)
 - **File Retention Management**: Configurable cleanup policies for received files
 - **Network Interface Detection**: Automatic interface discovery and configuration
 - **Health Monitoring**: Built-in health checks and comprehensive logging
@@ -74,6 +77,7 @@ Scanner → TCP File Data (708) → Agent → [Storage/Forward] → Target
 | **Discovery Service** | Network discovery and response handling | `src/services/agent_discovery_response.py` |
 | **Scanner Service** | Core business logic orchestration | `src/core/scanner_service.py` |
 | **File Transfer** | TCP file operations | `src/services/file_transfer.py` |
+| **Raw File Converter** | Scanner format conversion to standard formats | `src/services/raw_converter.py` |
 | **Network Management** | Interface detection and configuration | `src/network/interfaces.py` |
 | **Protocol Implementation** | Message parsing and validation | `src/dto/network_models.py` |
 
@@ -88,17 +92,25 @@ Scanner → TCP File Data (708) → Agent → [Storage/Forward] → Target
 
 ## Operational Modes
 
-### 1. Standalone Mode
-- **Purpose**: Direct file storage and processing
-- **Use Case**: Simple scanner integration, file archival
+### 1. Agent Mode (File Processing)
+- **Purpose**: Receive scanner files and convert to standard formats
+- **Use Case**: Document processing, format standardization, legacy scanner modernization
 - **Configuration**: `proxy.enabled: false`
-- **Behavior**: Stores received files locally with retention management
+- **Behavior**: 
+  - Receives raw scanner files via TCP
+  - Analyzes file format (B&W, grayscale, color, PDF)
+  - Converts to appropriate standard format (JPG, PNG, PDF)
+  - Stores converted files in `files/` directory
+  - Maintains raw files in `files/raw/` for backup
 
-### 2. Proxy Mode  
+### 2. Proxy Mode (File Forwarding)
 - **Purpose**: Intelligent file forwarding to target agents
 - **Use Case**: Network bridging, load balancing, legacy integration
 - **Configuration**: `proxy.enabled: true`, `proxy.agent_ip_address: "target_ip"`
-- **Behavior**: Receives files locally then automatically forwards to configured agent
+- **Behavior**: 
+  - Receives files locally in `files/raw/`
+  - Automatically forwards to configured agent
+  - Maintains local copies with retention management
 
 ## Deployment Options
 
@@ -118,9 +130,10 @@ make logs           # Log monitoring
 
 ### Container Deployment
 ```bash
-make docker-build   # Build production image
-make docker-run     # Start with networking
+make docker-build   # Build production image (scanner-proxy:latest)
+make docker-run     # Start with consistent naming (scanner-proxy project)
 make docker-logs    # Container monitoring
+make docker-stop    # Clean shutdown
 ```
 
 ## Configuration Management
@@ -131,9 +144,10 @@ make docker-logs    # Container monitoring
 - **Custom**: Environment variable `SCANNER_CONFIG_ENV` controls selection
 
 ### Key Configuration Areas
+- **Operation Mode**: Agent mode (file conversion) vs Proxy mode (forwarding)
 - **Network Settings**: Ports, timeouts, buffer sizes
-- **Proxy Configuration**: Target agents, forwarding behavior  
-- **File Management**: Storage directories, retention policies
+- **File Management**: Storage directories (`files/` and `files/raw/`), retention policies
+- **Raw File Processing**: Format detection and conversion settings
 - **Logging**: Levels, rotation, output destinations
 - **Agent Identity**: Service naming and identification
 

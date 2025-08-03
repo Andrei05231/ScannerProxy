@@ -2,22 +2,24 @@
 
 ## Project Overview
 
-ScannerProxy is a Python-based network service that facilitates secure scanner discovery and file transfer operations over UDP/TCP protocols. The system implements a modular, SOLID-principled architecture supporting both standalone mode (local file storage) and proxy mode (file forwarding to target agents). Built with modern Python practices, it provides comprehensive deployment options including local development, Docker containerization, and systemd service integration.
+ScannerProxy is a Python-based network service that facilitates secure scanner discovery and file transfer operations over UDP/TCP protocols. The system implements a modular, SOLID-principled architecture supporting both agent mode (raw file conversion to standard formats) and proxy mode (file forwarding to target agents). Built with modern Python practices, it provides comprehensive deployment options including local development, Docker containerization, and systemd service integration.
 
 ### Key Features
-- **Dual-Mode Operation**: Standalone file storage or proxy forwarding
+- **Dual-Mode Operation**: Agent mode for file conversion or proxy mode for forwarding
+- **Raw File Processing**: Automatic conversion of scanner files to JPG/PNG/PDF formats
 - **Protocol Implementation**: Custom UDP/TCP scanner communication protocol
 - **Rich Testing Tools**: Interactive CLI with progress tracking and network visualization
 - **Production Ready**: Docker containers, systemd services, health monitoring
 - **Comprehensive Logging**: Structured logging with rotation and filtering
 - **Network Discovery**: Automatic interface detection and agent discovery
-- **File Management**: Automatic retention policies and cleanup
+- **File Management**: Automatic retention policies and cleanup with format conversion
 
 ### Target Use Cases
-- Scanner network integration and file routing
-- Legacy scanner modernization with proxy capabilities  
+- Scanner network integration with automatic format conversion
+- Legacy scanner modernization with standard format output
 - Network testing and protocol development
 - Document workflow automation and processing
+- Multi-agent file routing and distribution networks
 
 ## Table of Contents
 
@@ -26,17 +28,16 @@ ScannerProxy is a Python-based network service that facilitates secure scanner d
 3. [Installation & Setup](#installation--setup)
 4. [Configuration](#configuration)
 5. [Core Components](#core-components)
-6. [Network Protocol](#network-protocol)
-7. [File Structure](#file-structure)
-8. [API Documentation](#api-documentation)
+6. [Raw File Processing](#raw-file-processing)
+7. [Network Protocol](#network-protocol)
+8. [File Structure](#file-structure)
 9. [Usage Examples](#usage-examples)
 10. [Testing](#testing)
 11. [Deployment](#deployment)
-12. [Proxy Mode](#proxy-mode)
+12. [Operation Modes](#operation-modes)
 13. [Troubleshooting](#troubleshooting)
 14. [Maintenance](#maintenance)
 15. [Security Considerations](#security-considerations)
-16. [Extension Points](#extension-points)
 
 ## Architecture Overview
 
@@ -58,10 +59,11 @@ The ScannerProxy follows SOLID design principles:
 ├─────────────────────────────────────────────────────────────┤
 │  Main Entry Point (src/main.py)                            │
 ├─────────────────────────────────────────────────────────────┤
-│  Core Services Layer                                        │
-│  ├── ScannerService (orchestration)                        │
-│  ├── AgentDiscoveryService (network discovery)             │
-│  └── FileTransferService (file operations)                 │
+│  Service Layer                                              │
+│  ├── AgentDiscoveryResponseService (Discovery & File RX)   │
+│  ├── ScannerService (Core orchestration)                   │
+│  ├── FileTransferService (File operations)                 │
+│  └── RawFileConverter (Format conversion)                  │
 ├─────────────────────────────────────────────────────────────┤
 │  Network Layer                                              │
 │  ├── NetworkInterfaceManager (interface detection)         │
@@ -219,7 +221,13 @@ scanner:
   default_src_name: "Scanner-Dev"  # Default source name
   max_retry_attempts: 3            # Maximum retry attempts
   default_file_path: "files/scan.raw"  # Default file to send
-  files_directory: "files"         # Directory containing files
+  files_directory: "files/raw"     # Directory for received raw files
+  max_files_retention: 10          # Maximum number of files to retain
+
+# Operation mode configuration
+proxy:
+  enabled: false                   # Set to true for proxy mode, false for agent mode
+  agent_ip_address: "192.168.1.138"  # Target agent for forwarding (proxy mode only)
 
 # File Transfer Protocol Messages
 file_transfer:
@@ -298,16 +306,54 @@ Manages network interface detection and configuration.
 - `get_network_info()`: Get network information for specific interface
 - `list_available_interfaces()`: List all available network interfaces
 
-### 5. ScannerProtocolMessage
+### 6. RawFileConverter
 
-**Location**: `src/dto/network_models.py`
+**Location**: `src/services/raw_converter.py`
 
-Data model for scanner protocol messages with validation.
+Handles conversion of scanner raw files to standard formats.
 
-**Key Features**:
-- Message serialization/deserialization
-- Field validation
-- Protocol constants management
+**Key Methods**:
+- `analyze_raw_file()`: Analyze raw file format and structure
+- `convert_to_jpg()`: Convert raw file to JPG format
+- `convert_to_png()`: Convert raw file to PNG format  
+- `convert_to_pdf()`: Convert raw file to PDF format
+
+**Supported Formats**:
+- Black & White scans (B2JP, B2PNG, B2PP)
+- Grayscale scans (G1JP, G2JP, G3JP, etc.)
+- Color scans (R2JP, R2PP with RGB data)
+- PDF format scans (PP suffix)
+
+## Raw File Processing
+
+### Scanner Format Structure
+
+The scanner uses a custom binary format with the following structure:
+
+```
+Byte Position | Content
+0-3          | Format identifier (e.g., "B2JP", "R2PP")
+4-7          | Reserved/quality bytes
+8-9          | Header size information
+10-11        | Reserved
+12-13        | Width (little-endian 16-bit)
+14-15        | Reserved
+16+          | Image data with EOL markers
+```
+
+### Format Detection
+
+The system automatically detects the format based on:
+- **Scan Type**: B (Black&White), G (Grayscale), R (Color/RGB)
+- **Quality**: 1-6 (quality levels)
+- **Output Format**: JP (JPEG), PP (PDF), PN (PNG)
+
+### Conversion Process
+
+1. **File Analysis**: Parse header to determine format, dimensions, and data structure
+2. **Data Extraction**: Extract pixel data while handling EOL markers
+3. **Format Conversion**: Convert to appropriate standard format
+4. **File Storage**: Save converted file to `files/` directory
 
 ## Network Protocol
 
@@ -391,7 +437,8 @@ ScannerProxy/
 │   ├── services/                   # Service layer implementations
 │   │   ├── __init__.py
 │   │   ├── agent_discovery_response.py  # Discovery response service
-│   │   └── file_transfer.py        # File transfer service
+│   │   ├── file_transfer.py        # File transfer service
+│   │   └── raw_converter.py        # Raw file format conversion service
 │   └── utils/                      # Utility modules and helpers
 │       ├── __init__.py
 │       ├── config.py               # Configuration management
@@ -417,8 +464,10 @@ ScannerProxy/
 │   └── scanner-prod.log            # Production environment logs
 │
 └── files/                          # File storage and transfer
-    ├── *.raw                       # Received raw scanner files
-    └── *.jpg                       # Processed image files (if applicable)
+    ├── raw/                        # Received raw scanner files
+    ├── *.jpg                       # Converted image files (agent mode)
+    ├── *.png                       # Converted image files (agent mode)
+    └── *.pdf                       # Converted PDF files (agent mode)
 ```
 
 ### Key Components Description
@@ -428,6 +477,7 @@ ScannerProxy/
 | **AgentDiscoveryResponseService** | Handles discovery broadcasts and file transfer requests | `src/services/agent_discovery_response.py` |
 | **ScannerService** | Core orchestration and network operations | `src/core/scanner_service.py` |
 | **FileTransferService** | File upload/download over TCP | `src/services/file_transfer.py` |
+| **RawFileConverter** | Scanner raw file format conversion | `src/services/raw_converter.py` |
 | **NetworkInterfaceManager** | Network interface detection | `src/network/interfaces.py` |
 | **ScannerProtocolMessage** | Protocol message parsing | `src/dto/network_models.py` |
 | **Mock Scanner** | Interactive testing tool | `tests/mocks/mock_scanner.py` |
@@ -596,24 +646,30 @@ cd tests/mocks
 python mock_scanner.py
 ```
 
-### Test Network Setup
+### Raw File Conversion
 
-For testing, you can set up a local network environment:
+The project includes a standalone conversion utility for testing:
 
-1. **Start mock scanner in one terminal:**
-   ```bash
-   python tests/mocks/mock_scanner.py
-   ```
+**Location**: `convert_raw.py`
 
-2. **Run main application in another terminal:**
-   ```bash
-   python -m src
-   ```
+**Usage**:
+```bash
+# Convert raw file to JPG (auto-detected format)
+python convert_raw.py files/raw/scan.raw
 
-3. **Monitor logs:**
-   ```bash
-   tail -f logs/scanner-dev.log
-   ```
+# Convert to specific format
+python convert_raw.py files/raw/scan.raw files/output.pdf
+python convert_raw.py files/raw/scan.raw files/output.png
+
+# Convert with custom quality
+python convert_raw.py files/raw/scan.raw files/output.jpg --quality 90
+```
+
+**Features**:
+- Automatic format detection based on file header
+- Support for all scanner formats (B&W, grayscale, color, PDF)
+- Quality settings for JPG/PDF output
+- Progress indication for large files
 
 ## Deployment
 
@@ -720,11 +776,12 @@ make restart-service   # Restart if needed
 
 #### Option 1: Docker Compose (Recommended)
 ```bash
-make docker-build   # Build image
-make docker-run     # Start with docker-compose
+make docker-build   # Build image (scanner-proxy:latest)
+make docker-run     # Start with consistent naming (scanner-proxy project)
 ```
 
 This uses the included `docker-compose.yml` with:
+- **Consistent naming** with scanner-proxy project name
 - **ipvlan networking** for direct network access
 - **Static IP assignment** (192.168.1.201)
 - **Volume mounts** for logs and files
@@ -817,34 +874,58 @@ make docker-run
    docker run -d --name scannerproxy --network host scannerproxy
    ```
 
-## Proxy Mode
+## Operation Modes
 
-### Overview
+### Agent Mode (File Processing)
 
-ScannerProxy supports a powerful proxy mode that automatically forwards received files to other network agents. This enables creating a network of interconnected scanner agents for distributed file processing workflows.
+Agent mode is designed for receiving scanner files and converting them to standard formats.
 
-### Configuration
-
-Enable proxy mode in the configuration file:
-
+#### Configuration
 ```yaml
-# config/production.yml or config/development.yml
 proxy:
-  enabled: true                    # Enable proxy mode
-  agent_ip_address: "192.168.1.138"  # Target agent IP for forwarding
-
-scanner:
-  default_src_name: "Scanner-Proxy"  # Identifier for this proxy agent
-  files_directory: "files"           # Local storage for received files
+  enabled: false  # Disable proxy mode to enable agent mode
 ```
 
-### How Proxy Mode Works
+#### Behavior
+1. **File Reception**: Receives raw scanner files via TCP on port 708
+2. **Format Analysis**: Analyzes file header to determine format type
+3. **Conversion**: Converts raw files to appropriate standard format:
+   - Black & white → JPG
+   - Grayscale → JPG  
+   - Color → JPG
+   - PDF format → PDF
+4. **Storage**: Saves converted files to `files/` directory
+5. **Backup**: Maintains raw files in `files/raw/` directory
+6. **Cleanup**: Applies retention policies to both directories
 
-1. **Scanner connects to proxy agent** (this service)
-2. **Proxy receives file** via TCP and stores locally  
-3. **Proxy automatically forwards** the file to the configured target agent
-4. **Target agent processes** the file normally
-5. **Local copy is retained** according to retention policy
+#### Use Cases
+- Document processing workflows
+- Legacy scanner modernization
+- Format standardization
+- Archive creation with multiple formats
+
+### Proxy Mode (File Forwarding)
+
+Proxy mode forwards received files to other network agents.
+
+#### Configuration
+```yaml
+proxy:
+  enabled: true
+  agent_ip_address: "192.168.1.138"  # Target agent IP
+```
+
+#### Behavior
+1. **File Reception**: Receives files and stores in `files/raw/`
+2. **Discovery**: Discovers target agent via UDP
+3. **Forwarding**: Transfers file to target agent via TCP
+4. **Local Storage**: Maintains local copy with retention management
+
+#### Use Cases
+- Network bridging between scanner segments
+- Load balancing across multiple agents
+- Backup and redundancy
+- Legacy network integration
 
 ### Proxy Flow Diagram
 

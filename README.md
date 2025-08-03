@@ -1,6 +1,10 @@
 # ScannerProxy - Network Scanner Agent Discovery & File Transfer Service
 
-A Python-based network service that facilitates scanner discovery and secure file transfer operations over UDP/TCP protocols. The system can operate in both standalone mode (stores received files locally) and proxy mode (forwards files to target agents).
+A Python-based network service that facilitates scanner discovery and secure file transfer operations over UDP/TCP protocols. The system can │   └── services/                # Service layer (discovery, file transfer, conversion)
+│       ├── agent_discovery_response.py  # Main discovery and file handling service
+│       ├── file_transfer.py    # TCP file transfer operations
+│       └── raw_converter.py    # Scanner raw file format conversion
+│   └── utils/                   # Utilities (config, logging)erate in both standalone mode (stores received files locally) and proxy mode (forwards files to target agents).
 
 ## Overview
 
@@ -24,25 +28,26 @@ This project includes a comprehensive Makefile for easy development, testing, an
 
 ### 🚀 Development Setup
 ```bash
-make setup          # Set up local Python environment & dependencies
-make dev-setup      # Complete development setup with confirmation
-make check          # Check system requirements and configuration
+make setup          # Set up Python environment and dependencies
+make dev-setup      # Complete development environment setup
+make verify-setup   # Verify installation and configuration
+make check          # Quick system requirements check
 ```
 
 ### 🧪 Testing & Development
 ```bash
-make mock-scanner   # Run interactive mock scanner for testing
-make service        # Run agent discovery service locally (standalone/proxy mode)
-make test           # Run basic functionality tests  
-make lint           # Check code syntax and style
+make mock-scanner   # Interactive testing tool with rich CLI
+make service        # Run agent service locally (development mode)
+make test           # Run automated tests
+make lint           # Code quality checks
 ```
 
 ### 🐳 Docker Operations
 ```bash
-make docker-build   # Build Docker image for production
-make docker-run     # Start containerized service with ipvlan network
-make docker-stop    # Stop and remove container
-make docker-logs    # View real-time container logs
+make docker-build   # Build production image (scanner-proxy:latest)
+make docker-run     # Start container with consistent naming
+make docker-stop    # Stop Docker container
+make docker-logs    # View container logs
 ```
 
 ### ⚙️ Production Deployment
@@ -50,6 +55,7 @@ make docker-logs    # View real-time container logs
 make prod-deploy      # Complete production setup (build + install service)
 make install-service  # Install as systemd service (auto-start on boot)
 make status          # Check service status and health
+make service-health  # Comprehensive service health check
 make logs            # View service logs (filtered)
 make remove-service  # Completely remove system service
 ```
@@ -91,19 +97,23 @@ The service uses environment-specific YAML configuration files:
 - **Environment Control**: Set `SCANNER_CONFIG_ENV` environment variable
 
 ### Current Production Configuration
-- **Operating Mode**: Proxy mode enabled
-- **Proxy Target**: 192.168.1.138 (files are forwarded to this agent)  
+- **Operating Mode**: Configurable (Agent mode for file conversion, Proxy mode for forwarding)
+- **Agent Mode**: Raw scanner files converted to JPG/PNG/PDF in `files/` directory
+- **Proxy Mode**: Files forwarded to 192.168.1.138 (when proxy enabled)  
 - **Container IP**: 192.168.1.201 (ipvlan network configuration)
+- **File Storage**: Raw files in `files/raw/`, converted files in `files/`
 - **File Retention**: 10 files maximum (older files auto-deleted)
 - **Network Ports**: UDP 706 (discovery), TCP 708 (file transfer)
 - **Logging**: Production-level logging to `logs/scanner-prod.log`
 
 ### Key Configuration Options
 ```yaml
-# Proxy mode configuration
+# Operation mode configuration
+# Agent mode: Receives and converts raw scanner files to standard formats
+# Proxy mode: Receives and forwards files to another agent
 proxy:
-  enabled: true                    # Enable/disable proxy forwarding
-  agent_ip_address: "192.168.1.138"  # Target agent for file forwarding
+  enabled: false                   # Set to true for proxy mode, false for agent mode
+  agent_ip_address: "192.168.1.138"  # Target agent for forwarding (proxy mode only)
 
 # Network settings  
 network:
@@ -113,7 +123,7 @@ network:
 
 # File management
 scanner:
-  files_directory: "files"        # Directory for received files
+  files_directory: "files/raw"    # Directory for received raw files
   max_files_retention: 10         # Auto-cleanup old files
   default_src_name: "Scanner-Prod"  # Agent identification name
 ```
@@ -226,14 +236,17 @@ ScannerProxy/
 │   └── scanner-prod.log        # Production logs
 │
 └── files/                      # File storage and transfer
-    ├── *.raw                   # Received scanner files
-    └── *.jpg                   # Processed image files
+    ├── raw/                    # Received raw scanner files 
+    ├── *.jpg                   # Converted image files (agent mode)
+    ├── *.png                   # Converted image files (agent mode)
+    └── *.pdf                   # Converted PDF files (agent mode)
 ```
 
 ### Key Components
-- **AgentDiscoveryResponseService**: Handles discovery and file transfer requests
+- **AgentDiscoveryResponseService**: Handles discovery and file transfer requests with format conversion
 - **ScannerService**: Core orchestration and network operations  
 - **FileTransferService**: Manages file upload/download over TCP
+- **RawFileConverter**: Converts scanner raw files to standard formats (JPG, PNG, PDF)
 - **NetworkInterfaceManager**: Network interface detection and configuration
 - **ScannerProtocolMessage**: Protocol message parsing and validation
 
