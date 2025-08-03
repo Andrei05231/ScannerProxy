@@ -13,7 +13,7 @@ scanner:
   default_src_name: "Scanner-Prod"
   max_retry_attempts: 5
   default_file_path: "files/scan.raw"
-  files_directory: "files"
+  files_directory: "files/raw"
   max_files_retention: 10  # Maximum number of received files to keep
 
 # File Transfer Protocol Messages
@@ -39,6 +39,9 @@ agents:
   max_agents: 50
 
 # Proxy configuration
+# Two operational modes:
+# 1. Proxy Mode (proxy.enabled: true): Receives files and forwards to another agent
+# 2. Agent Mode (proxy.enabled: false): Receives files, converts from raw format, and stores locally
 proxy:
-  enabled: true  # Set to true to enable proxy mode
-  agent_ip_address: "192.168.1.138"  # IP address of the target agent to forward files to
+  enabled: false  # Set to true to enable proxy mode, false for agent mode
+  agent_ip_address: "192.168.1.138"  # IP address of the target agent to forward files to (proxy mode only)

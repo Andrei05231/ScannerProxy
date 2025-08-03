@@ -11,10 +11,11 @@ from typing import Optional, Callable, Any
 from pathlib import Path
 from datetime import datetime
 
-from ..dto.network_models import ScannerProtocolMessage
+from ..dto.network_models import ScannerProtocolMessage, ProtocolConstants
 from ..network.protocols.message_builder import ScannerProtocolMessageBuilder
 from ..utils.config import config
 from .file_transfer import FileTransferService
+from .raw_converter import RawFileConverter
 
 
 class AgentDiscoveryResponseService:
@@ -355,6 +356,10 @@ class AgentDiscoveryResponseService:
             if self.proxy_enabled and self.proxy_agent_ip and self._file_transfer_service:
                 self.logger.info(f"Proxy mode: forwarding received file to {self.proxy_agent_ip}")
                 self._forward_file_to_agent(filepath)
+            else:
+                # Agent mode: convert raw file and save to files directory
+                self.logger.info(f"Agent mode: converting raw file to standard format")
+                self._convert_and_save_raw_file(filepath)
             
         except Exception as e:
             self.logger.error(f"Error in file transfer from {client_addr}: {e}")
@@ -521,3 +526,48 @@ class AgentDiscoveryResponseService:
                     
         except Exception as e:
             self.logger.error(f"Error during file cleanup: {e}")
+
+    def _convert_and_save_raw_file(self, raw_filepath: Path) -> None:
+        """
+        Convert raw file to standard format and save to files directory.
+        
+        Args:
+            raw_filepath: Path to the received raw file
+        """
+        try:
+            converter = RawFileConverter()
+            
+            # Analyze the raw file to determine the appropriate format
+            analysis = converter.analyze_raw_file(raw_filepath)
+            self.logger.info(f"Raw file analysis: {analysis}")
+            
+            # Determine output format based on file analysis
+            # Default to JPG for most scans, PDF for specific formats
+            if analysis.get('format_type') == 'pdf':
+                output_format = 'pdf'
+                extension = '.pdf'
+            else:
+                # Use JPG for images (grayscale, color, B&W)
+                output_format = 'jpg'
+                extension = '.jpg'
+            
+            # Generate output filename (remove .raw extension, add new extension)
+            base_name = raw_filepath.stem  # filename without extension
+            output_filename = f"{base_name}{extension}"
+            
+            # Save to files directory (parent of files/raw)
+            files_dir = Path(self.files_directory).parent  # files/raw -> files
+            output_filepath = files_dir / output_filename
+            
+            # Convert the file
+            if output_format == 'pdf':
+                result_path = converter.convert_to_pdf(raw_filepath, output_filepath)
+            else:
+                result_path = converter.convert_to_jpg(raw_filepath, output_filepath, quality=95)
+            
+            self.logger.info(f"Successfully converted {raw_filepath.name} to {result_path}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to convert raw file {raw_filepath}: {e}")
+            # Keep the raw file in case conversion failed
+            self.logger.info(f"Raw file preserved at: {raw_filepath}")
