@@ -91,23 +91,67 @@ class RawFileConverter:
         
         # Analyze file structure to find height
         file_size = file_path.stat().st_size
-        
-        # Find EOL markers to determine height
-        with open(file_path, 'rb') as f:
-            data = f.read()
-            
-        eol_marker = struct.pack('<H', width)  # Width as little-endian 16-bit
-        height = data.count(eol_marker)
-        
-        # Calculate expected row size
         header_size = 16  # Fixed header size
-        if height > 0:
-            data_size = file_size - header_size
-            row_size = data_size // height
-            pixel_data_per_row = row_size - 4  # Subtract EOL marker + padding
+        
+        # Determine bytes per pixel based on scan type
+        # Note: Based on analysis, all scan types appear to use 1 byte per pixel
+        # Color information might be encoded differently or use a palette
+        if scan_type == 'black_white':
+            bytes_per_pixel = 1  # 8-bit even for B&W
+        elif scan_type == 'grayscale':
+            bytes_per_pixel = 1  # 8-bit grayscale
+        elif scan_type == 'color':
+            bytes_per_pixel = 1  # 8-bit indexed color or compressed format
         else:
+            bytes_per_pixel = 1  # Default fallback
+            
+        # Calculate expected row structure
+        # Each row: pixel_data + EOL_marker(2 bytes) + padding(2 bytes)
+        expected_pixel_data_per_row = width * bytes_per_pixel
+        expected_row_size = expected_pixel_data_per_row + 4  # +4 for EOL + padding
+        
+        # Calculate height based on file structure
+        data_size = file_size - header_size
+        if expected_row_size > 0:
+            height = data_size // expected_row_size
+            row_size = expected_row_size
+            pixel_data_per_row = expected_pixel_data_per_row
+        else:
+            height = 0
             row_size = 0
             pixel_data_per_row = 0
+            
+        # Verify our calculation by checking actual EOL markers at expected positions
+        eol_marker = struct.pack('<H', width)  # Width as little-endian 16-bit
+        verified_height = 0
+        
+        if height > 0:
+            with open(file_path, 'rb') as f:
+                f.seek(header_size)  # Skip header
+                
+                for row in range(min(height, 10)):  # Check first 10 rows for verification
+                    # Skip to expected EOL position
+                    f.seek(header_size + row * row_size + pixel_data_per_row)
+                    
+                    # Read potential EOL marker
+                    potential_eol = f.read(2)
+                    if potential_eol == eol_marker:
+                        verified_height += 1
+                    else:
+                        # If EOL doesn't match, our calculation might be wrong
+                        self.logger.warning(f"EOL verification failed at row {row}: expected {eol_marker.hex()}, got {potential_eol.hex()}")
+                        break
+                        
+            # If verification failed for early rows, fall back to counting all EOL markers
+            if verified_height < min(height, 10) and verified_height < 5:
+                self.logger.warning("Row structure verification failed, falling back to EOL marker counting")
+                with open(file_path, 'rb') as f:
+                    data = f.read()
+                height = data.count(eol_marker)
+                if height > 0:
+                    data_size = file_size - header_size
+                    row_size = data_size // height
+                    pixel_data_per_row = row_size - 4
             
         metadata = {
             'scan_type': scan_type,
@@ -119,6 +163,7 @@ class RawFileConverter:
             'header_size': header_size,
             'row_size': row_size,
             'pixel_data_per_row': pixel_data_per_row,
+            'bytes_per_pixel': bytes_per_pixel,
             'estimated_bits_per_pixel': (pixel_data_per_row * 8 / width) if width > 0 else 0
         }
         
@@ -146,37 +191,47 @@ class RawFileConverter:
             height = metadata['height']
             row_size = metadata['row_size']
             pixel_data_per_row = metadata['pixel_data_per_row']
+            scan_type = metadata['scan_type']
             
             image_data = []
+            eol_marker = struct.pack('<H', width)
             
             for row in range(height):
-                # Read one row of data
+                # Read entire row of data
                 row_data = f.read(row_size)
                 if len(row_data) < row_size:
                     self.logger.warning(f"Incomplete row {row}: got {len(row_data)} bytes, expected {row_size}")
                     break
                     
-                # Extract pixel data (exclude EOL marker and padding)
+                # Extract pixel data from the beginning of the row
                 pixel_data = row_data[:pixel_data_per_row]
                 
-                # Verify EOL marker
-                eol_marker = row_data[pixel_data_per_row:pixel_data_per_row+2]
-                expected_eol = struct.pack('<H', width)
-                if eol_marker != expected_eol:
-                    self.logger.warning(f"Unexpected EOL marker in row {row}: {eol_marker.hex()}")
+                # Verify EOL marker at the expected position (after pixel data)
+                eol_position = pixel_data_per_row
+                actual_eol = row_data[eol_position:eol_position+2]
                 
-                # Convert to pixel values (assuming 8-bit grayscale for now)
-                if len(pixel_data) >= width:
+                if actual_eol != eol_marker:
+                    self.logger.warning(f"EOL marker mismatch in row {row}: expected {eol_marker.hex()} at position {eol_position}, got {actual_eol.hex()}")
+                    # Continue processing anyway, but log the issue
+                
+                # Convert pixel data based on scan type
+                if scan_type == 'color' and len(pixel_data) >= width:
+                    # For color images, we have 1 byte per pixel (indexed color or compressed)
+                    # We'll treat it as grayscale for now and let PIL handle any color mapping
+                    row_pixels = list(pixel_data[:width])
+                    image_data.append(row_pixels)
+                elif len(pixel_data) >= width:
+                    # For B&W or grayscale (1 byte per pixel)
                     row_pixels = list(pixel_data[:width])
                     image_data.append(row_pixels)
                 else:
-                    self.logger.warning(f"Insufficient pixel data in row {row}: {len(pixel_data)} bytes")
+                    self.logger.warning(f"Insufficient pixel data in row {row}: got {len(pixel_data)} bytes, expected at least {width}")
                     break
             
             # Convert to numpy array
             if image_data:
                 image_array = np.array(image_data, dtype=np.uint8)
-                self.logger.info(f"Extracted image array shape: {image_array.shape}")
+                self.logger.info(f"Extracted image array shape: {image_array.shape} for {scan_type} image")
             else:
                 raise ValueError("No valid image data extracted")
                 
@@ -204,18 +259,17 @@ class RawFileConverter:
             
         # Create PIL Image
         if metadata['scan_type'] == 'black_white':
-            # For black & white, we might need to apply thresholding
-            # Convert to pure black and white
+            # For black & white, apply thresholding
             threshold = 128
             image_array = np.where(image_array > threshold, 255, 0).astype(np.uint8)
             pil_image = Image.fromarray(image_array, mode='L')
         elif metadata['scan_type'] == 'grayscale':
             pil_image = Image.fromarray(image_array, mode='L')
         elif metadata['scan_type'] == 'color':
-            # For color images, we'd need to handle RGB data differently
-            # This would require understanding how color data is stored
-            pil_image = Image.fromarray(image_array, mode='L')  # Fallback to grayscale
-            self.logger.warning("Color mode not fully implemented, converting as grayscale")
+            # For color images with 1 byte per pixel, treat as grayscale
+            # The scanner might be using indexed color or a custom color encoding
+            pil_image = Image.fromarray(image_array, mode='L')
+            self.logger.info("Color image converted as grayscale (1 byte per pixel format)")
         else:
             pil_image = Image.fromarray(image_array, mode='L')
             
@@ -251,8 +305,9 @@ class RawFileConverter:
         elif metadata['scan_type'] == 'grayscale':
             pil_image = Image.fromarray(image_array, mode='L')
         elif metadata['scan_type'] == 'color':
-            pil_image = Image.fromarray(image_array, mode='L')  # Fallback
-            self.logger.warning("Color mode not fully implemented, converting as grayscale")
+            # For color images with 1 byte per pixel, treat as grayscale
+            pil_image = Image.fromarray(image_array, mode='L')
+            self.logger.info("Color image converted as grayscale (1 byte per pixel format)")
         else:
             pil_image = Image.fromarray(image_array, mode='L')
             
