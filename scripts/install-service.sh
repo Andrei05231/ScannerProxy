@@ -53,8 +53,8 @@ After=docker.service
 Type=forking
 RemainAfterExit=yes
 WorkingDirectory=$WORKING_DIR
-ExecStart=$DOCKER_PATH compose up -d
-ExecStop=$DOCKER_PATH compose down
+ExecStart=$DOCKER_PATH compose -p scanner-proxy up -d
+ExecStop=$DOCKER_PATH compose -p scanner-proxy down
 TimeoutStartSec=0
 
 [Install]
@@ -72,8 +72,8 @@ After=network.target
 Type=forking
 RemainAfterExit=yes
 WorkingDirectory=$WORKING_DIR
-ExecStart=$DOCKER_PATH compose up -d
-ExecStop=$DOCKER_PATH compose down
+ExecStart=$DOCKER_PATH compose -p scanner-proxy up -d
+ExecStop=$DOCKER_PATH compose -p scanner-proxy down
 TimeoutStartSec=0
 
 [Install]

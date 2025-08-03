@@ -17,4 +17,4 @@ sudo systemctl status $SERVICE_NAME --no-pager || echo -e "${RED}Service not ins
 
 echo ""
 echo -e "${BLUE}Docker Container Status:${NC}"
-docker-compose ps 2>/dev/null || echo -e "${RED}Docker not running${NC}"
+docker-compose -p scanner-proxy ps 2>/dev/null || echo -e "${RED}Docker not running${NC}"

@@ -12,7 +12,7 @@ YELLOW := \033[1;33m
 BLUE := \033[0;34m
 NC := \033[0m # No Color
 
-.PHONY: help setup clean mock-scanner service docker-build docker-run docker-stop install-service remove-service status logs test lint check emergency-stop restart-service
+.PHONY: help setup clean mock-scanner service docker-build docker-run docker-stop install-service remove-service status logs test lint check emergency-stop restart-service service-health verify-setup
 
 # Default target
 help:
@@ -38,9 +38,11 @@ help:
 	@echo "  make status         - Check service status"
 	@echo "  make logs           - View service logs"
 	@echo "  make restart-service - Restart system service"
+	@echo "  make service-health - Comprehensive service health check"
 	@echo ""
 	@echo "$(YELLOW)Utility:$(NC)"
 	@echo "  make check          - Quick system check"
+	@echo "  make verify-setup   - Verify Scanner Proxy setup"
 	@echo "  make emergency-stop - Stop all processes"
 
 # Local Environment
@@ -81,19 +83,19 @@ docker-build:
 
 docker-run: docker-build
 	@echo "$(BLUE)Starting Docker container...$(NC)"
-	@docker-compose up -d
+	@docker-compose -p scanner-proxy up -d
 	@echo "$(GREEN)✓ Docker container started!$(NC)"
 	@echo "$(YELLOW)Use 'make docker-logs' to view logs$(NC)"
 	@echo "$(YELLOW)Use 'make docker-stop' to stop the container$(NC)"
 
 docker-stop:
 	@echo "$(YELLOW)Stopping Docker container...$(NC)"
-	@docker-compose down
+	@docker-compose -p scanner-proxy down
 	@echo "$(GREEN)✓ Docker container stopped!$(NC)"
 
 docker-logs:
 	@echo "$(BLUE)Docker container logs:$(NC)"
-	@docker-compose logs -f
+	@docker-compose -p scanner-proxy logs -f
 
 # System Service Management
 install-service:
@@ -112,6 +114,16 @@ restart-service:
 	@echo "$(YELLOW)Restarting Scanner Proxy service...$(NC)"
 	@sudo systemctl restart scanner-proxy.service
 	@echo "$(GREEN)✓ Service restarted$(NC)"
+	@echo "$(YELLOW)Use 'make status' to check service status$(NC)"
+
+service-health:
+	@echo "$(BLUE)Checking Scanner Proxy service health...$(NC)"
+	@echo "$(YELLOW)System Service Status:$(NC)"
+	@sudo systemctl is-active scanner-proxy.service && echo "$(GREEN)✓ System service is active$(NC)" || echo "$(RED)✗ System service is not active$(NC)"
+	@echo "$(YELLOW)Docker Container Status:$(NC)"
+	@docker-compose -p scanner-proxy ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "$(RED)✗ Docker containers not running$(NC)"
+	@echo "$(YELLOW)Network Connectivity:$(NC)"
+	@docker-compose -p scanner-proxy exec scanner-proxy netstat -tulpn 2>/dev/null | grep -E "(706|708)" && echo "$(GREEN)✓ Network ports are open$(NC)" || echo "$(RED)✗ Network ports not accessible$(NC)"
 
 # Utility Commands
 check:
@@ -131,3 +143,15 @@ dev-setup: setup
 prod-deploy: docker-build install-service
 	@echo "$(GREEN)✓ Production deployment complete!$(NC)"
 	@echo "$(BLUE)Scanner Proxy Agent Service is now running as a system service$(NC)"
+	@echo "$(YELLOW)Run 'make service-health' to verify deployment$(NC)"
+
+# Quick verification command
+verify-setup:
+	@echo "$(BLUE)Verifying Scanner Proxy setup...$(NC)"
+	@echo "$(YELLOW)Docker Image:$(NC)"
+	@docker images scanner-proxy:latest --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}" 2>/dev/null || echo "$(RED)✗ Docker image not found$(NC)"
+	@echo "$(YELLOW)Docker Compose Project:$(NC)"
+	@docker-compose -p scanner-proxy config --services 2>/dev/null && echo "$(GREEN)✓ Docker Compose configuration valid$(NC)" || echo "$(RED)✗ Docker Compose configuration invalid$(NC)"
+	@echo "$(YELLOW)Configuration Files:$(NC)"
+	@test -f config/production.yml && echo "$(GREEN)✓ Production config exists$(NC)" || echo "$(RED)✗ Production config missing$(NC)"
+	@test -f config/development.yml && echo "$(GREEN)✓ Development config exists$(NC)" || echo "$(RED)✗ Development config missing$(NC)"
