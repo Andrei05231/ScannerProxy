@@ -54,7 +54,9 @@ class RawFileConverter:
         # Format mappings
         self.format_map = {
             (0x4A, 0x50): 'jpg',  # ASCII 'JP'
-            (0x50, 0x44): 'pdf'   # ASCII 'PD' (assumption)
+            (0x50, 0x50): 'pdf',  # ASCII 'PP' (PDF format)
+            (0x50, 0x44): 'pdf',  # ASCII 'PD' (alternative PDF marker)
+            (0x50, 0x46): 'pdf'   # ASCII 'PF' (alternative PDF marker)
         }
     
     def analyze_raw_file(self, file_path: Path) -> Dict[str, Any]:
@@ -344,6 +346,58 @@ class RawFileConverter:
         
         self.logger.info(f"Converted {raw_file_path} to {output_path}")
         return output_path
+    
+    def convert_to_pdf(self, raw_file_path: Path, output_path: Optional[Path] = None, 
+                      quality: int = 95) -> Path:
+        """
+        Convert raw file to PDF format.
+        
+        Args:
+            raw_file_path: Path to the input raw file
+            output_path: Path for output PDF file (optional)
+            quality: JPG quality for PDF compression (1-100)
+            
+        Returns:
+            Path to the created PDF file
+        """
+        # Extract image data
+        image_array, metadata = self.extract_image_data(raw_file_path)
+        
+        # Determine output path
+        if output_path is None:
+            output_path = raw_file_path.with_suffix('.pdf')
+            
+        # Create PIL Image
+        if metadata['scan_type'] == 'black_white':
+            threshold = 128
+            image_array = np.where(image_array > threshold, 255, 0).astype(np.uint8)
+            pil_image = Image.fromarray(image_array, mode='L')
+        elif metadata['scan_type'] == 'grayscale':
+            pil_image = Image.fromarray(image_array, mode='L')
+        elif metadata['scan_type'] == 'color':
+            # For color images, we now have proper RGB data
+            if len(image_array.shape) == 3 and image_array.shape[2] == 3:
+                # RGB image (height, width, 3)
+                pil_image = Image.fromarray(image_array, mode='RGB')
+                self.logger.info("Color image converted as RGB")
+            else:
+                # Fallback to grayscale if color processing failed
+                self.logger.warning("Color image processing failed, converting as grayscale")
+                pil_image = Image.fromarray(image_array, mode='L')
+        else:
+            pil_image = Image.fromarray(image_array, mode='L')
+            
+        # Save as PDF
+        # PIL can save images directly as PDF
+        if pil_image.mode == 'RGB':
+            # For RGB images, save directly
+            pil_image.save(output_path, 'PDF', resolution=300.0, optimize=True)
+        else:
+            # For grayscale/B&W images, we can optionally compress them
+            pil_image.save(output_path, 'PDF', resolution=300.0, optimize=True)
+        
+        self.logger.info(f"Converted {raw_file_path} to {output_path}")
+        return output_path
 
 
 def convert_raw_file(input_path: str, output_path: Optional[str] = None, 
@@ -354,8 +408,8 @@ def convert_raw_file(input_path: str, output_path: Optional[str] = None,
     Args:
         input_path: Path to input raw file
         output_path: Path for output file (optional)
-        output_format: Output format ('jpg' or 'png')
-        quality: JPG quality if applicable (1-100)
+        output_format: Output format ('jpg', 'png', or 'pdf')
+        quality: JPG/PDF quality if applicable (1-100)
         
     Returns:
         Path to the converted file
@@ -372,6 +426,8 @@ def convert_raw_file(input_path: str, output_path: Optional[str] = None,
         result_path = converter.convert_to_jpg(raw_path, out_path, quality)
     elif output_format.lower() == 'png':
         result_path = converter.convert_to_png(raw_path, out_path)
+    elif output_format.lower() == 'pdf':
+        result_path = converter.convert_to_pdf(raw_path, out_path, quality)
     else:
         raise ValueError(f"Unsupported output format: {output_format}")
         
@@ -384,6 +440,7 @@ if __name__ == "__main__":
     
     if len(sys.argv) < 2:
         print("Usage: python raw_converter.py <input_raw_file> [output_file] [format] [quality]")
+        print("Supported formats: jpg, png, pdf")
         sys.exit(1)
         
     input_file = sys.argv[1]
