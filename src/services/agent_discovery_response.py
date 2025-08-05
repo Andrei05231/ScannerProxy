@@ -35,6 +35,8 @@ class AgentDiscoveryResponseService:
         self.tcp_port = config.get('network.tcp_port', 708)
         self.agent_name = agent_name or config.get('scanner.default_src_name', 'Agent')
         self.files_directory = config.get('scanner.files_directory', 'received_files')
+        self.username = config.get('runtime.username','Shared')
+
         self.max_files_retention = config.get('scanner.max_files_retention', 10)
         self.logger = logging.getLogger(__name__)
         
@@ -104,7 +106,7 @@ class AgentDiscoveryResponseService:
             # Setup TCP socket for file transfers
             self._tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self._tcp_socket.bind((self.local_ip, self.tcp_port))
+            self._tcp_socket.bind(('0.0.0.0', self.tcp_port))
             self._tcp_socket.listen(5)
             self._tcp_socket.settimeout(1.0)  # Set timeout for clean shutdown
 
@@ -557,7 +559,11 @@ class AgentDiscoveryResponseService:
             
             # Save to files directory (parent of files/raw)
             files_dir = Path(self.files_directory).parent  # files/raw -> files
-            output_filepath = files_dir / output_filename
+            
+            user_filepath = files_dir / self.username
+            user_filepath.mkdir(parents=True, exist_ok=True)
+            self.logger.warning(f"USERFILE{self.username}")
+            output_filepath = user_filepath / output_filename
             
             # Convert the file
             if output_format == 'pdf':

@@ -11,7 +11,7 @@ services:
     # Network configuration
     networks:
       ipvlan-net:
-        ipv4_address: 192.168.1.201
+        ipv4_address: 10.0.52.201
     
     # Port exposure
     ports:
@@ -23,6 +23,7 @@ services:
       - SCANNER_CONFIG_ENV=production
       - PYTHONPATH=/app/src
       - PYTHONUNBUFFERED=1
+      - USERNAME=test
     
     # Volume mounts
     volumes:
@@ -59,8 +60,8 @@ networks:
   ipvlan-net:
     driver: ipvlan
     driver_opts:
-      parent: eth0
+      parent: ens19
     ipam:
       config:
-        - subnet: 192.168.1.0/24
-          gateway: 192.168.1.1
+        - subnet: 10.0.52.0/24
+          gateway: 10.0.52.1
