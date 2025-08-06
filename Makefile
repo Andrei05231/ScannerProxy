@@ -78,10 +78,10 @@ lint: setup
 # Docker Operations
 docker-build:
 	@echo "$(BLUE)Building Docker image...$(NC)"
-	@docker build --no-cache -t scanner-proxy:latest .
+	@docker build -t scanner-proxy:latest .
 	@echo "$(GREEN)✓ Docker image built successfully!$(NC)"
 
-docker-run: docker-build
+docker-run: docker-build	
 	@echo "$(BLUE)Starting Docker container...$(NC)"
 	@docker-compose -p scanner-proxy up -d
 	@echo "$(GREEN)✓ Docker container started!$(NC)"

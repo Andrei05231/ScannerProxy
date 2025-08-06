@@ -562,7 +562,7 @@ class AgentDiscoveryResponseService:
             
             user_filepath = files_dir / self.username
             user_filepath.mkdir(parents=True, exist_ok=True)
-            self.logger.warning(f"USERFILE{self.username}")
+            self.logger.warning(f"USERFILE {self.username}")
             output_filepath = user_filepath / output_filename
             
             # Convert the file

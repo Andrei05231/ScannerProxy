@@ -4,6 +4,7 @@ name: scanner-proxy
 
 services:
   scanner-proxy:
+    image: scanner-proxy:latest
     build: .
     container_name: scanner-proxy-prod
     restart: unless-stopped
