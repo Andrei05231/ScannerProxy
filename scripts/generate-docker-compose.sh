@@ -1,5 +1,8 @@
 #!/bin/bash
 
+
+# !! Winbind configuration required for fetching AD group users, set "winbind cache time" in /etc/samba/smb.conf to adjust cashing time based on how often you want to get group users
+
 AD_GROUP="custom_scan_users"
 BASE_COMPOSE_FILE="../docker-compose.yml"
 SERVICE_TEMPLATE="scanner-proxy"
