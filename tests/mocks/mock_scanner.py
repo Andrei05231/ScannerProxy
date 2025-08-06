@@ -1,0 +1,801 @@
+"""
+Mock scanner using the new modular architecture.
+Demonstrates clean separation of concerns and SOLID principles.
+"""
+import logging
+import sys
+import socket
+import threading
+import time
+import mimetypes
+from pathlib import Path
+from typing import Optional, List, Tuple, Any
+import inquirer
+import humanize
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn, TimeElapsedColumn, TransferSpeedColumn
+
+# Add src to Python path for imports when running as script
+if __name__ == "__main__":
+    src_path = Path(__file__).parent.parent.parent / "src"
+    sys.path.insert(0, str(src_path))
+
+# Import using relative paths when run as module, absolute when run as script
+try:
+    from src.core.scanner_service import ScannerService
+    from src.utils.config import config
+    from src.utils.logging_setup import setup_logging
+except ImportError:
+    from core.scanner_service import ScannerService
+    from utils.config import config
+    from utils.logging_setup import setup_logging
+
+# Initialize rich console
+console = Console()
+
+# Global metadata server instance
+metadata_server = None
+
+
+def show_welcome():
+    """Display welcome message with rich formatting"""
+    welcome_text = Text("Scanner Proxy", style="bold blue")
+    subtitle = Text("Modular Network Scanner with SOLID Architecture", style="italic")
+    
+    panel = Panel.fit(
+        f"{welcome_text}\n{subtitle}",
+        title="Welcome",
+        border_style="blue"
+    )
+    console.print(panel)
+
+
+def interactive_menu():
+    """Interactive CLI menu using inquirer library"""
+    global metadata_server
+    
+    # Check if metadata server is running
+    metadata_status = "Running" if metadata_server and metadata_server.running else "Stopped"
+    metadata_option = f"Metadata Response Server ({metadata_status})"
+    
+    questions = [
+        inquirer.List(
+            'operation',
+            message="Select an operation",
+            choices=[
+                ('Dummy Operation', 'dummy'),
+                ('Discover Agents', 'discover'),
+                (metadata_option, 'metadata'),
+                ('Exit', 'exit')
+            ]
+        )
+    ]
+    
+    answers = inquirer.prompt(questions)
+    return answers['operation'] if answers else 'exit'
+        
+
+def dummy_operation():
+    """Dummy operation for testing with rich formatting"""
+    console.print("\n")
+    panel = Panel(
+        "This is a placeholder operation for testing purposes.\nNo actual scanner operations are performed.",
+        title="[bold yellow]Dummy Operation[/bold yellow]",
+        border_style="yellow"
+    )
+    console.print(panel)
+    console.input("\n[dim]Press Enter to return to main menu...[/dim]")
+
+
+def discover_agents_operation():
+    """Perform agent discovery operation with rich formatting"""
+    console.print("\n")
+    
+    # Setup logging
+    setup_logging()
+    logger = logging.getLogger(__name__)
+    
+    with console.status("[bold green]Initializing scanner service...", spinner="dots"):
+        try:
+            # Create and initialize scanner service
+            scanner_service = ScannerService()
+            scanner_service.initialize()
+            
+            # Display network status
+            network_status = scanner_service.get_network_status()
+        except Exception as e:
+            logger.error(f"Scanner initialization failed: {e}")
+            console.print(f"[bold red]Error:[/bold red] {e}")
+            return
+    
+    # Create network info table
+    table = Table(title="Network Information")
+    table.add_column("Property", style="cyan", no_wrap=True)
+    table.add_column("Value", style="magenta")
+    
+    table.add_row("Local IP", network_status['local_ip'])
+    table.add_row("Broadcast IP", network_status['broadcast_ip'])
+    table.add_row("Interface", network_status['interface_name'])
+    
+    console.print(table)
+    
+    # Discover agents (outside of status context to avoid spinner during selection)
+    try:
+        with console.status("[bold green]Discovering agents on network...", spinner="dots"):
+            discovered_agents = scanner_service.discover_agents()
+        
+        # Print summary with rich formatting (after spinner stops)
+        agents_found = print_discovery_summary(discovered_agents)
+        
+        # If agents were found, allow user to select one
+        if agents_found:
+            console.print("\n")
+            selected_agent = select_agent(discovered_agents)
+            
+            if selected_agent:
+                # Ask user what to do with the selected agent
+                next_action = agent_action_menu(selected_agent)
+                
+                if next_action == 'send_file':
+                    send_file_to_agent(scanner_service, selected_agent)
+                elif next_action == 'view_details':
+                    view_agent_details(selected_agent)
+                # 'back' option just continues to the end
+        
+    except Exception as e:
+        logger.error(f"Scanner operation failed: {e}")
+        console.print(f"[bold red]Error:[/bold red] {e}")
+    
+    console.input("\n[dim]Press Enter to return to main menu...[/dim]")
+
+
+def print_discovery_summary(discovered_agents):
+    """Print a summary of discovered agents with rich formatting"""
+    console.print("\n")
+    
+    if discovered_agents:
+        # Create agents table
+        agents_table = Table(title=f"Discovery Results - Found {len(discovered_agents)} Agent(s)")
+        agents_table.add_column("#", style="cyan", no_wrap=True)
+        agents_table.add_column("Address", style="yellow")
+        agents_table.add_column("Source Name", style="green")
+        agents_table.add_column("Destination Name", style="blue")
+        agents_table.add_column("IP", style="magenta")
+        
+        for i, (message, address) in enumerate(discovered_agents, 1):
+            agents_table.add_row(
+                str(i),
+                address,
+                message.src_name.decode('ascii', errors='ignore'),
+                message.dst_name.decode('ascii', errors='ignore'),
+                str(message.initiator_ip)
+            )
+        
+        console.print(agents_table)
+        return True
+    else:
+        panel = Panel(
+            "No agents discovered on the network listening for scanned documents.",
+            title="[bold yellow]Discovery Results[/bold yellow]",
+            border_style="yellow"
+        )
+        console.print(panel)
+        return False
+
+
+def select_agent(discovered_agents):
+    """Allow user to select one of the discovered agents"""
+    if not discovered_agents:
+        return None
+    
+    # Create choices for inquirer
+    choices = []
+    for i, (message, address) in enumerate(discovered_agents):
+        src_name = message.src_name.decode('ascii', errors='ignore')
+        dst_name = message.dst_name.decode('ascii', errors='ignore')
+        choice_text = f"{src_name} at {address} (→ {dst_name})"
+        choices.append((choice_text, i))
+    
+    # Add option to go back
+    choices.append(("← Back to main menu", -1))
+    
+    console.print("\n")  # Add spacing before the selection menu
+    
+    questions = [
+        inquirer.List(
+            'selected_agent',
+            message="Select an agent to connect to",
+            choices=choices
+        )
+    ]
+    
+    answers = inquirer.prompt(questions)
+    if answers and answers['selected_agent'] != -1:
+        selected_index = answers['selected_agent']
+        selected_agent = discovered_agents[selected_index]
+        
+        # Display selected agent details
+        message, address = selected_agent
+        src_name = message.src_name.decode('ascii', errors='ignore')
+        dst_name = message.dst_name.decode('ascii', errors='ignore')
+        
+        # Create detailed info panel
+        info_text = f"""[bold]Selected Agent Details:[/bold]
+        
+Address: {address}
+Source Name: {src_name}
+Destination Name: {dst_name}
+IP: {message.initiator_ip}
+        
+[green]✓ Agent selected successfully![/green]"""
+        
+        panel = Panel(
+            info_text,
+            title="[bold green]Agent Selection[/bold green]",
+            border_style="green"
+        )
+        console.print(panel)
+        
+        return selected_agent
+    
+    return None
+
+
+def agent_action_menu(selected_agent):
+    """Menu for actions to perform with the selected agent"""
+    message, address = selected_agent
+    src_name = message.src_name.decode('ascii', errors='ignore')
+    
+    questions = [
+        inquirer.List(
+            'action',
+            message=f"What would you like to do with {src_name}?",
+            choices=[
+                ('Send File Transfer Request', 'send_file'),
+                ('View Agent Details', 'view_details'),
+                ('← Back to main menu', 'back')
+            ]
+        )
+    ]
+    
+    answers = inquirer.prompt(questions)
+    return answers['action'] if answers else 'back'
+
+
+def select_file_to_send():
+    """Let user select a file to send from the files directory"""
+    files_dir = Path(config.get('scanner.files_directory', 'files'))
+    
+    # Check if files directory exists
+    if not files_dir.exists():
+        console.print(f"[red]Files directory '{files_dir}' does not exist![/red]")
+        return None
+    
+    # Get list of files in the directory with better type detection
+    try:
+        # Common file types for scanner operations
+        valid_extensions = {'.raw', '.pdf', '.jpg', '.jpeg', '.png', '.txt', '.doc', '.docx', '.tiff', '.bmp', '.gif'}
+        
+        # Get all files and filter by type
+        all_files = list(files_dir.iterdir())
+        files = []
+        
+        for file_path in all_files:
+            if file_path.is_file():
+                # Check by extension first
+                if file_path.suffix.lower() in valid_extensions:
+                    files.append(file_path)
+                else:
+                    # Check by MIME type for better detection
+                    mime_type, _ = mimetypes.guess_type(str(file_path))
+                    if mime_type and any(mime_type.startswith(prefix) for prefix in ['image/', 'application/pdf', 'text/']):
+                        files.append(file_path)
+        
+        if not files:
+            console.print(f"[yellow]No files found in '{files_dir}' directory![/yellow]")
+            console.print(f"[dim]Supported file types: {', '.join(sorted(valid_extensions))}[/dim]")
+            console.print(f"[dim]Also supports files detected by MIME type (images, PDFs, text files)[/dim]")
+            return None
+        
+        # Create file selection table
+        files_table = Table(title=f"Available Files in '{files_dir}'")
+        files_table.add_column("#", style="cyan", no_wrap=True)
+        files_table.add_column("File Name", style="white")
+        files_table.add_column("Size", style="yellow")
+        
+        for i, file_path in enumerate(files, 1):
+            file_size = file_path.stat().st_size
+            size_str = humanize.naturalsize(file_size)
+            files_table.add_row(str(i), file_path.name, size_str)
+        
+        console.print(files_table)
+        
+        # Create choices for inquirer
+        choices = []
+        for file_path in files:
+            file_size = file_path.stat().st_size
+            size_str = humanize.naturalsize(file_size)
+            choice_text = f"{file_path.name} ({size_str})"
+            choices.append((choice_text, str(file_path)))
+        
+        # Add option to cancel
+        choices.append(("← Cancel", None))
+        
+        console.print("\n")  # Add spacing before the selection menu
+        
+        questions = [
+            inquirer.List(
+                'selected_file',
+                message="Select a file to send",
+                choices=choices
+            )
+        ]
+        
+        answers = inquirer.prompt(questions)
+        if answers and answers['selected_file']:
+            selected_path = answers['selected_file']
+            console.print(f"[green]✓ Selected file: {selected_path}[/green]")
+            return selected_path
+        
+        return None
+        
+    except Exception as e:
+        console.print(f"[red]Error reading files directory: {e}[/red]")
+        return None
+
+
+def send_file_to_agent(scanner_service, selected_agent):
+    """Send file transfer request to the selected agent"""
+    message, address = selected_agent
+    src_name = message.src_name.decode('ascii', errors='ignore')
+    dst_name = message.dst_name.decode('ascii', errors='ignore')
+    
+    # Extract IP from address (format is usually "ip:port")
+    target_ip = address.split(':')[0] if ':' in address else address
+    
+    # Let user select which file to send
+    selected_file = select_file_to_send()
+    if not selected_file:
+        return  # User cancelled or no files available
+    
+    console.print(f"\n[bold cyan]Sending file transfer request to {src_name}...[/bold cyan]")
+    console.print(f"[dim]File to send: {selected_file}[/dim]")
+    
+    # Get file size for progress bar using pathlib
+    selected_path = Path(selected_file)
+    if selected_path.exists():
+        file_size = selected_path.stat().st_size
+        file_size_str = humanize.naturalsize(file_size)
+        console.print(f"[dim]File size: {file_size_str}[/dim]")
+    else:
+        file_size = 0
+    
+    # Progress tracking variables
+    progress_data = {'bytes_sent': 0, 'file_size': file_size, 'task_id': None}
+    
+    def progress_callback(bytes_sent, total_bytes):
+        """Update progress bar"""
+        progress_data['bytes_sent'] = bytes_sent
+        if progress_data['task_id'] is not None and progress_data.get('progress'):
+            progress_data['progress'].update(progress_data['task_id'], completed=bytes_sent)
+    
+    # Create progress bar configuration
+    progress_columns = [
+        SpinnerColumn(),
+        TextColumn("[bold blue]Transferring", justify="right"),
+        BarColumn(bar_width=None),
+        TaskProgressColumn(),
+        "•",
+        TransferSpeedColumn(),
+        "•",
+        TimeElapsedColumn(),
+        "•",
+        TimeRemainingColumn(),
+    ]
+    
+    with Progress(*progress_columns, console=console, transient=False) as progress:
+        # Add progress tracking to the callback
+        progress_data['progress'] = progress
+        
+        # Start with UDP discovery phase
+        discovery_task = progress.add_task("Sending UDP request...", total=None)
+        
+        try:
+            success, response = scanner_service.send_file_transfer_request(
+                target_ip=target_ip,
+                dst_name=dst_name,
+                file_path=selected_file,
+                progress_callback=progress_callback
+            )
+            
+            # Remove discovery task
+            progress.remove_task(discovery_task)
+            
+            if success and response:
+                # UDP response received, now show file transfer progress
+                progress_data['task_id'] = progress.add_task(
+                    f"Sending {Path(selected_file).name}", 
+                    total=file_size
+                )
+                
+                # The progress callback will update the progress bar during file transfer
+                # Wait a moment for the transfer to complete
+                while progress_data['bytes_sent'] < file_size and progress_data['bytes_sent'] > 0:
+                    time.sleep(0.1)
+                
+            elif success and not response:
+                # UDP sent but no response
+                progress.add_task("No UDP response received", total=1, completed=1)
+            else:
+                # Failed to send UDP
+                progress.add_task("UDP request failed", total=1, completed=1)
+                
+        except Exception as e:
+            progress.remove_task(discovery_task)
+            console.print(f"[red]Error during file transfer: {e}[/red]")
+            return
+    
+    if success:
+        if response:
+            # Got a response from the agent
+            response_src = response.src_name.decode('ascii', errors='ignore')
+            response_dst = response.dst_name.decode('ascii', errors='ignore')
+            panel = Panel(
+                f"[green]✓ File transfer request sent successfully![/green]\n\n"
+                f"Target: {src_name} ({target_ip})\n"
+                f"Network Address: {address}\n"
+                f"File: {selected_file}\n"
+                f"Request Type: File Transfer (0x5A5400)\n"
+                f"Status: Message delivered via UDP\n\n"
+                f"[bold cyan]UDP Response Received:[/bold cyan]\n"
+                f"From: {response_src}\n"
+                f"To: {response_dst}\n"
+                f"Response Type: {response.type_of_request.hex()}\n\n"
+                f"[bold yellow]TCP File Transfer:[/bold yellow]\n"
+                f"Initiated TCP connection on port {config.get('network.tcp_port', 708)}\n"
+                f"File transfer protocol: direct file data transfer",
+                title="[bold green]File Transfer Completed[/bold green]",
+                border_style="green"
+            )
+        else:
+            # Request sent but no response received
+            panel = Panel(
+                f"[green]✓ File transfer request sent successfully![/green]\n\n"
+                f"Target: {src_name} ({target_ip})\n"
+                f"Network Address: {address}\n"
+                f"File: {selected_file}\n"
+                f"Request Type: File Transfer (0x5A5400)\n"
+                f"Status: Message delivered via UDP\n\n"
+                f"[yellow]⚠ No UDP response received from agent[/yellow]\n"
+                f"TCP connection not initiated (requires UDP response first)",
+                title="[bold green]Transfer Request Sent[/bold green]",
+                border_style="green"
+            )
+    else:
+        panel = Panel(
+            f"[red]✗ Failed to send file transfer request[/red]\n\n"
+            f"Target: {src_name} ({target_ip})\n"
+            f"Network Address: {address}\n"
+            f"File: {selected_file}\n"
+            f"Please check network connection and try again.",
+            title="[bold red]Transfer Request Failed[/bold red]",
+            border_style="red"
+        )
+    
+    console.print(panel)
+    console.input("\n[dim]Press Enter to continue...[/dim]")
+
+
+def view_agent_details(selected_agent):
+    """Display detailed information about the selected agent"""
+    message, address = selected_agent
+    src_name = message.src_name.decode('ascii', errors='ignore')
+    dst_name = message.dst_name.decode('ascii', errors='ignore')
+    
+    # Create a detailed table
+    details_table = Table(title=f"Agent Details: {src_name}")
+    details_table.add_column("Property", style="cyan", no_wrap=True)
+    details_table.add_column("Value", style="white")
+    
+    details_table.add_row("Source Name", src_name)
+    details_table.add_row("Destination Name", dst_name)
+    details_table.add_row("IP Address", str(message.initiator_ip))
+    details_table.add_row("Network Address", address)
+    details_table.add_row("Signature", message.signature.hex())
+    details_table.add_row("Type of Request", message.type_of_request.hex())
+    details_table.add_row("Message Size", f"{len(message.to_bytes())} bytes")
+    
+    console.print(details_table)
+    console.input("\n[dim]Press Enter to continue...[/dim]")
+
+
+class MetadataResponseServer:
+    """UDP server that responds to metadata requests on port 704"""
+    
+    def __init__(self, port=704):
+        self.port = port
+        self.running = False
+        self.socket = None
+        self.server_thread = None
+        
+        # The metadata response payload as specified
+        self.metadata_response = bytes([
+            0x00, 0x00, 0x4c, 0x32, 0x34, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x57, 0x2e, 0x00, 0x00,
+            0x9c, 0x17, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02, 0x05, 0x02, 0x01, 0x0a, 0x16, 0x04, 0x04,
+            0x04, 0x05, 0x04, 0x04, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x52, 0x54, 0x50, 0x52, 0x54, 0x30, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x52, 0x54, 0x50, 0x52, 0x54, 0x30, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x52, 0x54, 0x50, 0x52, 0x54, 0x30, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x52, 0x54, 0x50, 0x52, 0x54, 0x30, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x52, 0x54, 0x50, 0x52, 0x54, 0x30, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x52, 0x54, 0x50, 0x52, 0x54, 0x30, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x52, 0x54, 0x50, 0x52, 0x54, 0x30, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x52, 0x54, 0x50, 0x52, 0x54, 0x30, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x52, 0x54, 0x50, 0x52, 0x54, 0x30, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x41, 0x52, 0x54, 0x50, 0x52, 0x54, 0x30, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00
+        ])
+        
+        # No signature checking - respond to any incoming message
+    
+    def start(self):
+        """Start the metadata response server"""
+        if self.running:
+            return False
+            
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.socket.bind(('0.0.0.0', self.port))
+            self.socket.settimeout(1.0)  # 1 second timeout for graceful shutdown
+            
+            self.running = True
+            self.server_thread = threading.Thread(target=self._server_loop, daemon=True)
+            self.server_thread.start()
+            
+            return True
+        except Exception as e:
+            console.print(f"[bold red]Error starting metadata server:[/bold red] {e}")
+            return False
+    
+    def stop(self):
+        """Stop the metadata response server"""
+        self.running = False
+        if self.socket:
+            self.socket.close()
+        if self.server_thread:
+            self.server_thread.join(timeout=3.0)
+    
+    def _server_loop(self):
+        """Main server loop to handle incoming requests"""
+        console.print(f"[bold green]Metadata server listening on port {self.port}[/bold green]")
+        
+        while self.running:
+            try:
+                data, addr = self.socket.recvfrom(1024)
+                
+                # Respond to any incoming message with the metadata payload
+                console.print(f"[cyan]Request received from {addr[0]}:{addr[1]} ({len(data)} bytes)[/cyan]")
+                
+                # Send the metadata response to any request
+                self.socket.sendto(self.metadata_response, addr)
+                console.print(f"[green]Sent metadata response to {addr[0]}:{addr[1]} ({len(self.metadata_response)} bytes)[/green]")
+                    
+            except socket.timeout:
+                # Timeout is expected - allows checking self.running
+                continue
+            except OSError:
+                # Socket closed
+                break
+            except Exception as e:
+                if self.running:
+                    console.print(f"[bold red]Server error:[/bold red] {e}")
+        
+        console.print(f"[bold yellow]Metadata server on port {self.port} stopped[/bold yellow]")
+
+
+def metadata_response_operation():
+    """Interactive metadata response server operation"""
+    global metadata_server
+    
+    console.print("\n")
+    
+    # Check current server status
+    is_running = metadata_server and metadata_server.running
+    
+    if is_running:
+        # Server is running - offer to stop it
+        info_text = """[bold]Metadata Response Server[/bold]
+
+The metadata server is currently [bold green]RUNNING[/bold green] on UDP port 704.
+It responds to ALL incoming messages with a predefined metadata payload.
+
+[yellow]Select an action below:[/yellow]"""
+        
+        panel = Panel(
+            info_text,
+            title="[bold green]Metadata Server - Running[/bold green]",
+            border_style="green"
+        )
+        console.print(panel)
+        
+        # Show server status
+        status_table = Table(title="Current Server Status")
+        status_table.add_column("Property", style="cyan", no_wrap=True)
+        status_table.add_column("Value", style="green")
+        
+        status_table.add_row("Status", "Running")
+        status_table.add_row("Port", str(metadata_server.port))
+        status_table.add_row("Protocol", "UDP")
+        status_table.add_row("Response Mode", "All Messages")
+        status_table.add_row("Response Size", f"{len(metadata_server.metadata_response)} bytes")
+        
+        console.print(status_table)
+        
+        # Ask if user wants to stop the server
+        questions = [
+            inquirer.List(
+                'action',
+                message="What would you like to do?",
+                choices=[
+                    ('Stop Metadata Server', 'stop'),
+                    ('← Back to main menu', 'back')
+                ]
+            )
+        ]
+        
+        answers = inquirer.prompt(questions)
+        if answers and answers['action'] == 'stop':
+            console.print("\n[yellow]Stopping metadata server...[/yellow]")
+            metadata_server.stop()
+            metadata_server = None
+            console.print("[bold green]Metadata server stopped successfully![/bold green]")
+            console.input("\n[dim]Press Enter to return to main menu...[/dim]")
+    
+    else:
+        # Server is not running - offer to start it
+        info_text = """[bold]Metadata Response Server[/bold]
+
+The metadata server is currently [bold red]STOPPED[/bold red].
+When started, it will listen on UDP port 704 and respond to ALL incoming messages 
+with a predefined metadata payload.
+
+[yellow]Select an action below:[/yellow]"""
+        
+        panel = Panel(
+            info_text,
+            title="[bold red]Metadata Server - Stopped[/bold red]",
+            border_style="red"
+        )
+        console.print(panel)
+        
+        # Ask if user wants to start the server
+        questions = [
+            inquirer.List(
+                'action',
+                message="What would you like to do?",
+                choices=[
+                    ('Start Metadata Server', 'start'),
+                    ('← Back to main menu', 'back')
+                ]
+            )
+        ]
+        
+        answers = inquirer.prompt(questions)
+        if answers and answers['action'] == 'start':
+            console.print("\n[yellow]Starting metadata server...[/yellow]")
+            
+            # Create and start server
+            metadata_server = MetadataResponseServer()
+            
+            if metadata_server.start():
+                # Show server status
+                status_table = Table(title="Server Started Successfully")
+                status_table.add_column("Property", style="cyan", no_wrap=True)
+                status_table.add_column("Value", style="green")
+                
+                status_table.add_row("Status", "Running")
+                status_table.add_row("Port", str(metadata_server.port))
+                status_table.add_row("Protocol", "UDP")
+                status_table.add_row("Response Mode", "All Messages")
+                status_table.add_row("Response Size", f"{len(metadata_server.metadata_response)} bytes")
+                
+                console.print(status_table)
+                
+                console.print("\n[bold green]Metadata server started successfully![/bold green]")
+                console.print("[dim]The server is now running in the background.[/dim]")
+                console.print("[dim]You can return to the main menu and use other functions.[/dim]")
+                console.print("[dim]Use the metadata option again to stop the server.[/dim]")
+            else:
+                console.print("[bold red]Failed to start metadata server![/bold red]")
+                metadata_server = None
+            
+            console.input("\n[dim]Press Enter to return to main menu...[/dim]")
+
+
+def main():
+    """Main function with interactive CLI menu using rich and inquirer"""
+    global metadata_server
+    
+    try:
+        # Show welcome message
+        show_welcome()
+        
+        while True:
+            selected_option = interactive_menu()
+            
+            if selected_option == 'exit':
+                # Clean up metadata server if running
+                if metadata_server and metadata_server.running:
+                    console.print("\n[yellow]Stopping metadata server before exit...[/yellow]")
+                    metadata_server.stop()
+                
+                console.print("\n[bold green]Thank you for using Scanner Proxy![/bold green]")
+                break
+            elif selected_option == 'dummy':
+                dummy_operation()
+            elif selected_option == 'discover':
+                discover_agents_operation()
+            elif selected_option == 'metadata':
+                metadata_response_operation()
+        
+        return 0
+        
+    except KeyboardInterrupt:
+        # Clean up metadata server on interrupt
+        if metadata_server and metadata_server.running:
+            console.print("\n[yellow]Stopping metadata server...[/yellow]")
+            metadata_server.stop()
+        
+        console.print("\n[yellow]Operation cancelled by user.[/yellow]")
+        return 1
+    except Exception as e:
+        # Clean up metadata server on error
+        if metadata_server and metadata_server.running:
+            console.print("\n[yellow]Stopping metadata server due to error...[/yellow]")
+            metadata_server.stop()
+        
+        console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+        return 1
+
+
+if __name__ == "__main__":
+    exit_code = main()
+    sys.exit(exit_code)

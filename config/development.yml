@@ -1,0 +1,47 @@
+# Network configuration
+network:
+  udp_port: 706
+  tcp_port: 708
+  discovery_timeout: 1.0
+  socket_timeout: 1.0
+  buffer_size: 1024
+  tcp_chunk_size: 1460
+  tcp_connection_timeout: 10.0
+
+# Scanner configuration  
+scanner:
+  default_src_name: "Scanner-Dev"
+  max_retry_attempts: 3
+  default_file_path: "files/scan.raw"
+  files_directory: "files/raw"
+  max_files_retention: 10  # Maximum number of received files to keep
+
+# File Transfer Protocol Messages
+file_transfer:
+  handshake_message: "FILE_TRANSFER_READY"
+  size_ok_message: "SIZE_OK"
+  complete_message: "FILE_TRANSFER_COMPLETE"
+  transfer_ok_message: "TRANSFER_OK"
+
+# Logging configuration
+logging:
+  level: "DEBUG"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_enabled: true
+  file_path: "logs/scanner-dev.log"
+  max_file_size: 10485760  # 10MB
+  backup_count: 5
+  console_enabled: false
+
+# Agent configuration
+agents:
+  discovery_interval: 30.0  # seconds
+  max_agents: 10
+
+# Proxy configuration
+# Two operational modes:
+# 1. Proxy Mode (proxy.enabled: true): Receives files and forwards to another agent
+# 2. Agent Mode (proxy.enabled: false): Receives files, converts from raw format, and stores locally
+proxy:
+  enabled: false  # Set to true to enable proxy mode, false for agent mode
+  agent_ip_address: "192.168.1.138"  # IP address of the target agent to forward files to (proxy mode only)

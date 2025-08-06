@@ -9,13 +9,17 @@ __pycache__/
 # Virtual environments
 proxyVenv/
 venv/
+.venv/
 .env/
+env/
+ENV/
 
 # Distribution / packaging
 .Python
 build/
 develop-eggs/
 dist/
+downloads/
 egg-info/
 .eggs/
 lib/
@@ -23,10 +27,16 @@ lib64/
 parts/
 sdist/
 var/
+wheels/
+pip-wheel-metadata/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
 
 # Installer logs
 debug.log
@@ -40,28 +50,238 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+.pytest_cache/
 nosetests.xml
 coverage.xml
 *.cover
+*.py,cover
 .hypothesis/
+tests/reports/
+test-results/
 
+# Translations
+*.mo
+*.pot
+
+# Django stuff (if ever used)
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff (if ever used)
+instance/
+.webassets-cache
+
+# Scrapy stuff (if ever used)
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+docs/build/
+.doctrees
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# IDEs and Editors
 # PyCharm
 .idea/
 *.iml
 
 # VS Code
 .vscode/
+*.code-workspace
 
-# Docker
-*.pid
+# Vim
+*.swp
+*.swo
+*~
 
-# Misc
-*.log
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Atom
+.atom/
+
+# Temporary files
 *.tmp
 *.bak
 *.swp
+*~
+
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Ignore raw scan data
+# Docker
+*.pid
+.dockerignore
+
+# Logs
+*.log
+logs/*.log
+log/
+logs/
+
+# Security and secrets
+*.key
+*.pem
+*.crt
+secrets.yml
+.secrets
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.backup
+*.bak
+*.orig
+
+# Compressed files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Project-specific ignores
+# Raw scan data files
 scan.raw
+*.raw
+files/*.raw
+
+# Configuration overrides
+config/local.yml
+config/secrets.yml
+config/*.local.yml
+
+# Test artifacts
+test_output/
+test_results/
+.coverage.*
+coverage-report.txt
+security-report.json
+requirements-frozen.txt
+
+# Documentation artifacts
+docs/coverage-report.txt
+docs/_build/
+htmlcov/
+
+# Development utilities
+.pre-commit-cache/
+.mypy_cache/
+.pytest_cache/
+
+# Machine learning / AI models (if any)
+*.model
+*.pkl
+*.pickle
+models/
+
+# Large files that shouldn't be in git
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.wmv
+*.flv
+*.webm
+*.m4v
+
+# Build artifacts
+*.tar.gz
+*.whl
+dist/
+build/
+
+# IDE specific
+*.iml
+.idea/
+*.sublime-*
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+
+files/*

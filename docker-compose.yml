@@ -1,0 +1,66 @@
+version: '3.8'
+
+name: scanner-proxy
+
+services:
+  scanner-proxy:
+    build: .
+    container_name: scanner-proxy-prod
+    restart: unless-stopped
+    
+    # Network configuration
+    networks:
+      ipvlan-net:
+        ipv4_address: 192.168.1.201
+    
+    # Port exposure
+    ports:
+      - "706:706/udp"    # Discovery port
+      - "708:708/tcp"    # File transfer port
+    
+    # Environment variables
+    environment:
+      - SCANNER_CONFIG_ENV=production
+      - PYTHONPATH=/app/src
+      - PYTHONUNBUFFERED=1
+    
+    # Volume mounts
+    volumes:
+      - ./logs:/app/logs
+      - ./files:/app/files
+      - ./config:/app/config:ro  # Read-only config mount
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pgrep -f 'python agent_discovery_app.py' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+
+networks:
+  ipvlan-net:
+    driver: ipvlan
+    driver_opts:
+      parent: eth0
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
+          gateway: 192.168.1.1
