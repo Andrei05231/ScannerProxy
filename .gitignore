@@ -285,3 +285,8 @@ build/
 .vscode/extensions.json
 
 files/*
+
+
+# Generated docker-compose file 
+
+docker-compose.generated.yml
