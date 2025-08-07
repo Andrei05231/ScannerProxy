@@ -1,0 +1,7 @@
+# For more information see the manual pages of crontab(5) and cron(8)
+#
+# m h  dom mon dow   command
+
+# UPDATE PATHS TO MATCH YOUR SCRIPT LOCATION
+
+0 * * * * echo "=== Checked users at $(date '+\%Y-\%m-\%d \%H:\%M:\%S') ===" >> /home/localadmin/ScannerProxy/logs/update-docker-compose.log && cd /home/localadmin/ScannerProxy/scripts && ./update-docker-compose.sh >> /home/localadmin/ScannerProxy/logs/update-docker-compose.log 2>&1
