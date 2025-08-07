@@ -14,6 +14,9 @@ START_IP=201
 users=$(wbinfo --group-info="$AD_GROUP" | cut -d':' -f4)
 IFS=',' read -ra user_array <<< "$users"
 
+# Add a shared container to the list
+user_array+=("Shared")
+
 # Empty the output file and start with the 'services:' key
 echo "services:" > "$OUTPUT_FILE"
 
