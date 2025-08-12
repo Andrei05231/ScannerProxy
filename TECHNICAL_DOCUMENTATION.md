@@ -465,9 +465,10 @@ ScannerProxy/
 │
 └── files/                          # File storage and transfer
     ├── raw/                        # Received raw scanner files
-    ├── *.jpg                       # Converted image files (agent mode)
-    ├── *.png                       # Converted image files (agent mode)
-    └── *.pdf                       # Converted PDF files (agent mode)
+    ├──<username>                   # Username selected on the scanner (Shared if no user)
+       ├── *.jpg                    # Converted image files (agent mode)
+       ├── *.png                    # Converted image files (agent mode)
+       └── *.pdf                    # Converted PDF files (agent mode)
 ```
 
 ### Key Components Description
@@ -894,7 +895,7 @@ proxy:
    - Grayscale → JPG  
    - Color → JPG
    - PDF format → PDF
-4. **Storage**: Saves converted files to `files/` directory
+4. **Storage**: Saves converted files to `files/<user>/` (or `files/Shared/` if no user)
 5. **Backup**: Maintains raw files in `files/raw/` directory
 6. **Cleanup**: Applies retention policies to both directories
 

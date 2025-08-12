@@ -211,7 +211,7 @@ Bytes 80-89: Final reserved fields
 │  └── Network Bridge Operations                             │
 ├─────────────────────────────────────────────────────────────┤
 │  File Management                                            │
-│  ├── Dual Directory Structure (raw/ & converted)           │
+│  ├── Multi Directory Structure (raw/ & <user>)             │
 │  ├── Automatic Retention Policy                            │
 │  ├── Timestamp-based Naming                                │
 │  └── Directory Management                                   │

@@ -46,6 +46,7 @@ make lint           # Code quality checks
 ```bash
 make docker-build   # Build production image (scanner-proxy:latest)
 make docker-run     # Start container with consistent naming
+make docker-run-ad  # Start containers based on Active Directory users
 make docker-stop    # Stop Docker container
 make docker-logs    # View container logs
 ```
@@ -102,6 +103,7 @@ The service uses environment-specific YAML configuration files:
 - **Proxy Mode**: Files forwarded to 192.168.1.138 (when proxy enabled)  
 - **Container IP**: 192.168.1.201 (ipvlan network configuration)
 - **File Storage**: Raw files in `files/raw/`, converted files in `files/`
+- **User Storage**: With SMB & AD, files go to `files/<username>/`; if no user, to `files/Shared/`
 - **File Retention**: 10 files maximum (older files auto-deleted)
 - **Network Ports**: UDP 706 (discovery), TCP 708 (file transfer)
 - **Logging**: Production-level logging to `logs/scanner-prod.log`
@@ -236,10 +238,11 @@ ScannerProxy/
 │   └── scanner-prod.log        # Production logs
 │
 └── files/                      # File storage and transfer
-    ├── raw/                    # Received raw scanner files 
-    ├── *.jpg                   # Converted image files (agent mode)
-    ├── *.png                   # Converted image files (agent mode)
-    └── *.pdf                   # Converted PDF files (agent mode)
+    ├── raw/                    # Received raw scanner files
+    ├──<username>               # Username selected on the scanner (Shared if no user)
+       ├── *.jpg                # Converted image files (agent mode)
+       ├── *.png                # Converted image files (agent mode)
+       └── *.pdf                # Converted PDF files (agent mode)
 ```
 
 ### Key Components
