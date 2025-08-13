@@ -16,6 +16,9 @@ class ConfigurationManager:
         # Check both SCANNER_ENV and SCANNER_CONFIG_ENV for environment setting
         self.environment = os.getenv("SCANNER_CONFIG_ENV") or os.getenv("SCANNER_ENV", "development")
         self._config_cache: Optional[Dict[str, Any]] = None
+        self._runtime_overrides: Optional[Dict[str,Any]] = {
+            'username' : os.getenv("USERNAME", "Shared")
+        }
     
     def load_config(self) -> Dict[str, Any]:
         """Load configuration for the current environment"""
@@ -30,14 +33,19 @@ class ConfigurationManager:
         
         if not config_file.exists():
             # Return default configuration
-            return self._get_default_config()
+            config_data = self._get_default_config()
+
+        else:     
+            try:
+                with config_file.open('r', encoding='utf-8') as f:
+                    config_data = yaml.safe_load(f)
+            except (yaml.YAMLError, IOError) as e:
+                # If config file is invalid, fall back to defaults
+                config_data = self._get_default_config()
         
-        try:
-            with config_file.open('r', encoding='utf-8') as f:
-                self._config_cache = yaml.safe_load(f)
-        except (yaml.YAMLError, IOError) as e:
-            # If config file is invalid, fall back to defaults
-            self._config_cache = self._get_default_config()
+        #append runtime overrides to config
+        config_data.setdefault("runtime",{}).update(self._runtime_overrides)
+        self._config_cache = config_data
         
         return self._config_cache
     

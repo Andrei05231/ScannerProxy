@@ -44,4 +44,4 @@ agents:
 # 2. Agent Mode (proxy.enabled: false): Receives files, converts from raw format, and stores locally
 proxy:
   enabled: false  # Set to true to enable proxy mode, false for agent mode
-  agent_ip_address: "192.168.1.138"  # IP address of the target agent to forward files to (proxy mode only)
+  agent_ip_address: "192.168.50.173"  # IP address of the target agent to forward files to (proxy mode only)

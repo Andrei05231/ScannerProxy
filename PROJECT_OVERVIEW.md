@@ -18,6 +18,7 @@ ScannerProxy is a sophisticated Python-based network service that enables seamle
 - **Automatic File Conversion**: Agent mode converts raw scanner files to JPG/PNG/PDF formats
 - **Intelligent File Forwarding**: Proxy mode forwards received files to target agents
 - **Multi-Format Support**: Handles various scanner formats (B&W, grayscale, color, PDF)
+- **User-Specific Storage**: With SMB & AD, files get saved to `files/<username>/` (or `files/Shared/` if no user)
 - **File Retention Management**: Configurable cleanup policies for received files
 - **Network Interface Detection**: Automatic interface discovery and configuration
 - **Health Monitoring**: Built-in health checks and comprehensive logging
@@ -49,7 +50,7 @@ The application follows SOLID design principles with a layered architecture:
 │  Data Layer                                                 │
 │  ├── Protocol Message Parsing                              │
 │  ├── Configuration Management                              │
-│  └── File Storage & Retention                              │
+│  └── File Storage & Retention (Optional user-specific dirs) │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -132,6 +133,7 @@ make logs           # Log monitoring
 ```bash
 make docker-build   # Build production image (scanner-proxy:latest)
 make docker-run     # Start with consistent naming (scanner-proxy project)
+make docker-run-ad  # Start containers based on AD users
 make docker-logs    # Container monitoring
 make docker-stop    # Clean shutdown
 ```

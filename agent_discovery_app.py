@@ -94,7 +94,7 @@ def main():
         
         # Get configuration
         udp_port = config.get('network.udp_port')
-        agent_name = config.get('scanner.default_src_name')
+        agent_name = config.get("runtime.username") or config.get('scanner.default_src_name')
         proxy_enabled = config.get('proxy.enabled', False)
         proxy_agent_ip = config.get('proxy.agent_ip_address', '')
         

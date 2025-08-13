@@ -81,9 +81,19 @@ docker-build:
 	@docker build -t scanner-proxy:latest .
 	@echo "$(GREEN)✓ Docker image built successfully!$(NC)"
 
-docker-run: docker-build
+docker-run: docker-build	
 	@echo "$(BLUE)Starting Docker container...$(NC)"
 	@docker-compose -p scanner-proxy up -d
+	@echo "$(GREEN)✓ Docker container started!$(NC)"
+	@echo "$(YELLOW)Use 'make docker-logs' to view logs$(NC)"
+	@echo "$(YELLOW)Use 'make docker-stop' to stop the container$(NC)"
+
+docker-run-ad: docker-build	
+	@echo "$(BLUE)Generating docker-compose based on AD users"
+	@$(SCRIPTS_DIR)/generate-docker-compose.sh
+	@echo "$(Green)✓Created docker-compose.generated.yml"
+	@echo "$(BLUE)Starting Docker containers...$(NC)"
+	@docker-compose -p scanner-proxy -f docker-compose.generated.yml up -d
 	@echo "$(GREEN)✓ Docker container started!$(NC)"
 	@echo "$(YELLOW)Use 'make docker-logs' to view logs$(NC)"
 	@echo "$(YELLOW)Use 'make docker-stop' to stop the container$(NC)"
