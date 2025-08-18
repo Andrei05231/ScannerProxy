@@ -46,8 +46,8 @@ if [ ! -f "/etc/systemd/system/$SERVICE_NAME" ]; then
         sudo tee /etc/systemd/system/$SERVICE_NAME > /dev/null << EOF
 [Unit]
 Description=Scanner Proxy Agent Service
-Requires=docker.service
-After=docker.service
+Requires=docker.service winbind.service
+After=docker.service winbind.service
 
 [Service]
 Type=forking
@@ -72,7 +72,8 @@ After=network.target
 Type=forking
 RemainAfterExit=yes
 WorkingDirectory=$WORKING_DIR
-ExecStart=$DOCKER_PATH compose -p scanner-proxy up -d
+ExecStartPre=/bin/bash -c 'cd $WORKING_DIR/scripts && ./generate-docker-compose.sh'
+ExecStart=$DOCKER_PATH compose -p scanner-proxy -f docker-compose.generated.yml up -d
 ExecStop=$DOCKER_PATH compose -p scanner-proxy down
 TimeoutStartSec=0
 

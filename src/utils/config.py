@@ -17,7 +17,7 @@ class ConfigurationManager:
         self.environment = os.getenv("SCANNER_CONFIG_ENV") or os.getenv("SCANNER_ENV", "development")
         self._config_cache: Optional[Dict[str, Any]] = None
         self._runtime_overrides: Optional[Dict[str,Any]] = {
-            'username' : os.getenv("USERNAME", "Shared")
+            'username' : os.getenv("USERNAME", "-Shared")
         }
     
     def load_config(self) -> Dict[str, Any]:

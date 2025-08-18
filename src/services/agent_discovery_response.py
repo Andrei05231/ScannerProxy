@@ -35,7 +35,7 @@ class AgentDiscoveryResponseService:
         self.tcp_port = config.get('network.tcp_port', 708)
         self.agent_name = agent_name or config.get('scanner.default_src_name', 'Agent')
         self.files_directory = config.get('scanner.files_directory', 'received_files')
-        self.username = config.get('runtime.username','Shared')
+        self.username = config.get('runtime.username','-Shared')
 
         self.max_files_retention = config.get('scanner.max_files_retention', 10)
         self.logger = logging.getLogger(__name__)

@@ -18,7 +18,7 @@ ScannerProxy is a sophisticated Python-based network service that enables seamle
 - **Automatic File Conversion**: Agent mode converts raw scanner files to JPG/PNG/PDF formats
 - **Intelligent File Forwarding**: Proxy mode forwards received files to target agents
 - **Multi-Format Support**: Handles various scanner formats (B&W, grayscale, color, PDF)
-- **User-Specific Storage**: With SMB & AD, files get saved to `files/<username>/` (or `files/Shared/` if no user)
+- **User-Specific Storage**: With SMB & AD, files get saved to `files/<username>/` (or `files/-Shared/` if no user)
 - **File Retention Management**: Configurable cleanup policies for received files
 - **Network Interface Detection**: Automatic interface discovery and configuration
 - **Health Monitoring**: Built-in health checks and comprehensive logging

@@ -103,7 +103,7 @@ The service uses environment-specific YAML configuration files:
 - **Proxy Mode**: Files forwarded to 192.168.1.138 (when proxy enabled)  
 - **Container IP**: 192.168.1.201 (ipvlan network configuration)
 - **File Storage**: Raw files in `files/raw/`, converted files in `files/`
-- **User Storage**: With SMB & AD, files go to `files/<username>/`; if no user, to `files/Shared/`
+- **User Storage**: With SMB & AD, files go to `files/<username>/`; if no user, to `files/-Shared/`
 - **File Retention**: 10 files maximum (older files auto-deleted)
 - **Network Ports**: UDP 706 (discovery), TCP 708 (file transfer)
 - **Logging**: Production-level logging to `logs/scanner-prod.log`
