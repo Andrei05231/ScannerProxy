@@ -1,7 +1,6 @@
 #!/bin/bash
 
-
-# !! Winbind configuration required for fetching AD group users, set "winbind cache time" in /etc/samba/smb.conf to adjust cashing time based on how often you want to get group users
+# !! Winbind configuration required for fetching AD group users, set "winbind cache time" in /etc/samba/smb.conf to adjust caching time based on how often you want to get group users
 
 AD_GROUP="custom_scan_users"
 BASE_COMPOSE_FILE="../docker-compose.yml"
@@ -11,11 +10,26 @@ IP_PREFIX="10.0.52."
 START_IP=201
 
 # Get user list from AD group via winbind
-users=$(wbinfo --group-info="$AD_GROUP" | cut -d':' -f4)
+users=$(wbinfo --group-info="$AD_GROUP" 2>/dev/null | cut -d':' -f4)
+
+# Check if wbinfo succeeded and returned users
+if [[ -z "$users" ]]; then
+  echo "⚠️ Could not fetch users from AD group '$AD_GROUP'."
+  if [[ -f "$OUTPUT_FILE" ]]; then
+    echo "ℹ️ Keeping existing $OUTPUT_FILE unchanged."
+    exit 0
+  else
+    echo "ℹ️ No existing $OUTPUT_FILE found. Creating one with only -Shared user."
+    users="-Shared"
+  fi
+fi
+
 IFS=',' read -ra user_array <<< "$users"
 
-# Add a shared container to the list
-user_array+=("-Shared")
+# Always add the shared container (unless it's already the only one)
+if [[ ! " ${user_array[*]} " =~ " -Shared " ]]; then
+  user_array+=("-Shared")
+fi
 
 # Empty the output file and start with the 'services:' key
 echo "services:" > "$OUTPUT_FILE"
@@ -46,3 +60,4 @@ echo "" >> "$OUTPUT_FILE"
 awk '/^networks:/ {flag=1; print; next} /^[^[:space:]]/ {flag=0} flag' "$BASE_COMPOSE_FILE" >> "$OUTPUT_FILE"
 
 echo "✅ Generated $OUTPUT_FILE with ${#user_array[@]} services and network definition."
+
