@@ -59,6 +59,22 @@ class RawFileConverter:
             (0x50, 0x46): 'pdf'   # ASCII 'PF' (alternative PDF marker)
         }
     
+    
+    def find_header_offset(file_path, max_scan=128):
+        with open(file_path, "rb") as f:
+            data = f.read(max_scan)  # only scan first N bytes
+
+        for i in range(len(data) - 3):
+            b0, b1, b2, b3 = data[i:i+4]
+
+            if (b0 in self.scan_type_map and
+                b1 in self.quality_map and
+                (b2, b3) in self.format_map):
+                return i  # just return the offset
+
+        return None
+
+
     def analyze_raw_file(self, file_path: Path) -> Dict[str, Any]:
         """
         Analyze a raw file and extract metadata from its header.
@@ -71,8 +87,10 @@ class RawFileConverter:
         """
         if not file_path.exists():
             raise FileNotFoundError(f"Raw file not found: {file_path}")
-            
+         
+        header_offset = self.find_header_offset(file_path)
         with open(file_path, 'rb') as f:
+            f.seek(header_offset)
             header = f.read(16)
             
         if len(header) < 16:
@@ -120,7 +138,7 @@ class RawFileConverter:
         expected_row_size = expected_pixel_data_per_row + 4  # +4 for EOL + padding
         
         # Calculate height based on file structure
-        data_size = file_size - header_size
+        data_size = file_size - header_size - header_offset
         if expected_row_size > 0:
             height = data_size // expected_row_size
             row_size = expected_row_size
@@ -172,6 +190,7 @@ class RawFileConverter:
             'row_data_width': row_data_width,  # Actual row data width in bytes
             'file_size': file_size,
             'header_size': header_size,
+            'header_offset':header_offset,
             'row_size': row_size,
             'pixel_data_per_row': pixel_data_per_row,
             'bytes_per_pixel': bytes_per_pixel,
