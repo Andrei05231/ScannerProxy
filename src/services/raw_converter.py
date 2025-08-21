@@ -60,19 +60,20 @@ class RawFileConverter:
         }
     
     
-    def find_header_offset(file_path, max_scan=128):
+    def find_header_offset(self, file_path: Path, max_scan=128):
         with open(file_path, "rb") as f:
             data = f.read(max_scan)  # only scan first N bytes
-
         for i in range(len(data) - 3):
             b0, b1, b2, b3 = data[i:i+4]
 
             if (b0 in self.scan_type_map and
                 b1 in self.quality_map and
                 (b2, b3) in self.format_map):
+                
                 return i  # just return the offset
 
-        return None
+        self.logger.warning("No Header Was Found")
+        return 0
 
 
     def analyze_raw_file(self, file_path: Path) -> Dict[str, Any]:
